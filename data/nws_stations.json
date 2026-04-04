@@ -1,0 +1,65 @@
+[
+    {
+        "callsign": "WXL45",
+        "frequency": 162400000,
+        "latitude": 38.878,
+        "longitude": -91.982,
+        "Note": "Columbia/Fulton, MO"
+    },
+    {
+        "callsign": "KWN55",
+        "frequency": 162425000,
+        "latitude": 38.761,
+        "longitude": -92.511,
+        "Note": "Jamestown/Jefferson City, MO"
+    },
+    {
+        "callsign": "WXL45",
+        "frequency": 162450000,
+        "latitude": 38.835,
+        "longitude": -91.957,
+        "Note": "Fulton, MO (Alt)"
+    },
+    {
+        "callsign": "WZ2511",
+        "frequency": 162475000,
+        "latitude": 38.741,
+        "longitude": -92.254,
+        "Note": "Ashland, MO"
+    },
+    {
+        "callsign": "KZZ46",
+        "frequency": 162475000,
+        "latitude": 39.713,
+        "longitude": -91.365,
+        "Note": "Hannibal, MO"
+    },
+    {
+        "callsign": "KWW37",
+        "frequency": 162525000,
+        "latitude": 38.151,
+        "longitude": -91.240,
+        "Note": "Bourbon, MO"
+    },
+    {
+        "callsign": "KPS42",
+        "frequency": 162525000,
+        "latitude": 39.610,
+        "longitude": -93.303,
+        "Note": "Sumner, MO"
+    },
+    {
+        "callsign": "KDO89",
+        "frequency": 162550000,
+        "latitude": 38.627,
+        "longitude": -90.199,
+        "Note": "St. Louis, MO"
+    },
+    {
+        "callsign": "WXL25",
+        "frequency": 162550000,
+        "latitude": 38.834,
+        "longitude": -90.431,
+        "Note": "St. Charles, MO"
+    }
+]

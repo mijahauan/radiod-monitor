@@ -1,0 +1,5258 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+<Document>
+
+<Style id="IDLE">
+		<IconStyle>
+			<scale>.6</scale>
+			<Icon>
+				<href>https://www.repeaterbook.com/images/ham/kml_pin.png</href>
+			</Icon>
+		</IconStyle>
+		<LabelStyle>
+			<color>ff00ff00</color>
+			<scale>0.7</scale>
+		</LabelStyle>
+	</Style>
+
+<Placemark>
+<name>N5BVA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Jane<br>
+147.255000+ 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=254'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.28089905,36.50630188,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WB0YRG</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Kansas City<br>
+927.487500- 151.4<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=3067'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.50330353,38.95930099,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0NXA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Springfield<br>
+927.012500- 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=3543'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.23125000,37.23987800,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WB0YRG</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Kansas City<br>
+442.550000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=4048'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.58209991,39.10290146,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KC0QLU</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Plattsburg<br>
+146.895000- 114.8<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=4195'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.45,39.57,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0SWP</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Osborn<br>
+442.675000+ 127.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=4196'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.35,39.75,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>AA0RC</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Mexico<br>
+147.255000+ 127.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5304'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.88289642,39.19919968,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0PR</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Macon<br>
+146.805000- 156.7<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5319'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.46800232,39.75400162,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0MPT</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Chillicothe<br>
+147.225000+ 94.8<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5495'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.59899902,39.73099899,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0ESM</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Lawson<br>
+147.375000+ 156.7<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5496'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.20,39.44,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WB0EM</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Warsaw<br>
+146.925000- 107.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5497'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.32241543,38.20171697,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0CBL</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Kirksville<br>
+145.130000- 156.7<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5498'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.58040851,40.26545415,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0SI</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Ashland<br>
+52.890000- 127.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5636'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.26,38.77,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KC0KWL</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Eldon<br>
+53.050000- 127.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5637'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.58,38.35,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0NXA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Republic<br>
+53.270000- 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5641'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.48658000,37.13153000,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KC0KW</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Kansas City<br>
+443.775000+ 110.9<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5647'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.58,39.10,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0CSM</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Sullivan<br>
+145.150000- <br>
+On-air: No<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5648'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.13970184,38.21939850,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WD0SKY</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Osborn<br>
+145.150000- 107.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5649'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.36,39.75,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0KYZ</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Saint Louis<br>
+145.170000- 127.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5650'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.38,38.65,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0GQ</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Raytown<br>
+145.170000- 151.4<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5652'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.47,39.01,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KA0EJQ</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Eolia<br>
+145.190000- <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5653'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.03250122,39.26470184,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0BSJ</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Excelsior Springs<br>
+145.190000- <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5654'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.23,39.34,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>AC0JK</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Shell Knob<br>
+145.210000- 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5655'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.87,36.68,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WB0QXW</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Saint Louis<br>
+145.210000- 123.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5657'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.24430084,38.59189987,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0ZRK</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Highlandville<br>
+145.230000- 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5658'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.28,36.93,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0MIC</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+West Plains<br>
+145.250000- 110.9<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5660'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.85,36.73,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0NXA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Nixa<br>
+145.270000- 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5661'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.31502500,37.04569700,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KA9HNT</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Saint Louis<br>
+145.270000- 123.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5663'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.28,38.63,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0DCA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Norwood<br>
+147.165000+ 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5665'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.42,37.11,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0EJC</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Independence<br>
+145.310000- 151.4<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5666'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.42019653,39.10100174,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0NWS</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Springfield<br>
+145.330000- 136.5<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5668'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.27970123,37.14609909,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KO0A</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Saint Charles<br>
+145.330000- 141.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5669'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.50589752,38.78219986,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>AB0JW</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Poplar Bluff<br>
+145.350000- 100.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5670'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.39510345,36.76279831,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0NWS</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Joplin<br>
+145.350000- 91.5<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5671'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.51,37.08,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0ARS</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Saint Louis<br>
+145.350000- 141.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5673'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.36380005,38.62070084,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KJ0A</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Saint Charles<br>
+145.370000- <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5674'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.60970306,38.75690079,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0EJC</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Independence<br>
+145.370000- 151.4<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5675'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.34880066,39.04949951,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0NXA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Granby<br>
+145.390000- 91.5<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5676'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.25250000,36.97944000,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0ETY</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Linn<br>
+145.390000- 127.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5677'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.85109711,38.52579880,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0RBR</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+O&#039;Fallon<br>
+145.410000- 100.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5679'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.69999695,38.82139969,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0HAM</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Lee&#039;s Summit<br>
+147.315000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5680'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.45490265,38.90850067,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KA0FKF</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Springfield<br>
+145.430000- 107.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5681'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.32389000,37.17088700,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0MB</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Gladstone<br>
+145.430000- <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5682'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.55,39.20,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0EEE</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Rolla<br>
+145.450000- 110.9<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5683'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.77159882,37.95930099,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0HL</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Nevada<br>
+145.450000- 91.5<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5684'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.22243800,37.75948300,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0ECA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+O&#039;Fallon<br>
+145.490000- 141.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5686'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.69200134,38.77600098,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0NWS</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Fordland<br>
+145.490000- 136.5<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5687'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.94396000,37.21166000,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WX0BC</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Columbia<br>
+146.610000- 127.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5689'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.31749725,38.96419907,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0QMF</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Scopus<br>
+146.820000- 100.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5690'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-89.93470001,37.37779999,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KC0TPS</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Saint Louis<br>
+146.610000- 100.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5691'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.24680328,38.56449890,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0KEM</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Hannibal<br>
+146.625000- 103.5<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5692'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.49960327,39.75730133,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0QOD</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Sainte Genevieve<br>
+146.625000- 100.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5693'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.05,37.98,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>AA0NC</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Eldon<br>
+146.625000- 131.8<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5694'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.58,38.35,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0SAX</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Carrollton<br>
+146.655000- 94.8<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5701'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.50,39.36,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KB8VLL</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+El Dorado Springs<br>
+146.670000- 91.5<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5702'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.02130127,37.87699890,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WB0HSI</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+O&#039;Fallon<br>
+146.670000- 141.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5703'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.71630096,38.80550003,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0QMF</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Cape Girardeau<br>
+146.685000- 100.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5706'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-89.56839752,37.40489960,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KA0EJQ</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Monroe City<br>
+146.700000- <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5707'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.74,39.66,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KC0SKY</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Lee&#039;s Summit<br>
+146.700000- 107.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5709'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.34033800,38.89056100,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0ZS</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Sunrise Beach<br>
+146.730000- 127.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5711'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.81,38.18,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0KE</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Bridgeton<br>
+146.730000- 141.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5712'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.43409729,38.75070190,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0SHQ</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Independence<br>
+146.730000- 151.4<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5713'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.42263620,39.09288570,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0SI</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Columbia<br>
+146.760000- 127.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5716'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.32199860,38.94800186,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W9AIU</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Shrewsbury<br>
+146.760000- 141.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5717'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.32880000,38.58200000,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KE0PKD</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Concordia<br>
+147.105000+ 156.7<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5718'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.57,39.00,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0NXA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Ozark<br>
+146.775000- <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5719'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.17638900,37.08828900,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KD0RIS</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Festus<br>
+146.775000- 100.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5720'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.36604964,38.20249868,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0GS</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Dixon<br>
+146.790000- 88.5<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5722'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.16100311,37.99679947,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0TE</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Kansas City<br>
+146.790000- 107.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5723'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.56734900,39.29946800,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KC0DBS</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Sullivan<br>
+146.805000- 110.9<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5724'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.20166600,38.18653800,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0WZR</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Thayer<br>
+146.805000- 110.9<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5725'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.54,36.52,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KC0FDQ</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Neosho<br>
+146.805000- 127.3<br>
+On-air: No<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5726'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.37,36.87,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0UAA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Kansas City<br>
+146.820000- 151.4<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5727'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.57859802,39.09970093,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0EAR</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Republic<br>
+146.820000- 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5728'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.48,37.12,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0SYL</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Paris<br>
+146.835000- 127.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5730'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.00,39.48,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0NH</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Saint Joseph<br>
+146.850000- 100.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5732'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.84,39.76,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0SRC</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Olivette<br>
+146.850000- 141.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5733'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.38849640,38.67279816,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0WKC</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Marshfield<br>
+146.865000- 156.7<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5735'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.92661931,37.33283808,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KB4VSP</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Jefferson City<br>
+146.865000- 127.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5736'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.21309662,38.55160141,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0IBV</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Van Buren<br>
+146.865000- 100.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5737'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.01,37.00,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0AU</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Holden<br>
+146.880000- 107.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5738'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.92228400,38.70686100,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0KEM</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Hannibal<br>
+146.880000- 103.5<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5740'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.36,39.71,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0GYE</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Brinktown<br>
+146.895000- CSQ<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5743'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.08,38.13,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0EBE</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Springfield<br>
+146.910000- 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5744'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.28237000,37.20940900,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KM0HP</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Poplar Bluff<br>
+146.910000- 100.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5745'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.47109985,36.80870056,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0SRC</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Des Peres<br>
+146.910000- 141.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5747'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.44730377,38.60440063,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KB0UFL</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+New Madrid<br>
+146.925000- <br>
+On-air: Unknown<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5748'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-89.53,36.59,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0AMC</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Arnold<br>
+146.925000- 192.8<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5749'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.41200000,38.44500000,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0HCA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+West Plains<br>
+146.940000- 110.9<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5751'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.81424400,36.60789700,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0SRC</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Clayton<br>
+146.940000- <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5753'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.34179688,38.64739990,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KA0RFO</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Laurie<br>
+146.955000- 192.8<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5754'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.80,38.20,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KB0RPJ</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Trenton<br>
+146.955000- 156.7<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5755'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.61660004,40.07889938,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0WJB</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Kansas City<br>
+146.970000- 151.4<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5756'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.57859802,39.09970093,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0OAR</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Freistatt<br>
+146.970000- 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5757'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.87139000,37.00139000,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KB0UFL</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Kennett<br>
+146.985000- 100.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5759'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.05500000,36.23527800,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0GK</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Dexter<br>
+147.000000- 100.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5760'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-89.96,36.80,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WB0IYC</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Joplin<br>
+147.000000+ 100.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5761'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.51550400,37.08888800,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0ETY</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Jefferson City<br>
+147.000000- 127.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5762'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.22166666,38.55888888,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0MDG</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Saint Louis<br>
+147.360000+ 141.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5763'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.44644900,38.64547300,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KB0VBN</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Blue Springs<br>
+147.015000+ 151.4<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5765'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.27760315,39.00889969,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0MDG</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Saint Louis<br>
+147.015000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5766'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.40290070,38.68050003,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0EOR</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Farmington<br>
+147.030000+ 100.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5767'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.56,37.80,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WA0SDO</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Sedalia<br>
+147.030000- 179.9<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5768'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.22830200,38.72380066,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0TIX</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Kearney<br>
+147.045000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5769'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.36,39.37,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0BYU</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Grant City<br>
+147.060000+ 94.8<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5770'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.41,40.49,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0NXA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Bolivar<br>
+147.060000+ 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5771'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.46250000,37.62555500,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0MA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Saint Louis<br>
+147.060000+ 141.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5772'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.35,38.76,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KB0TLL</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Hillsboro<br>
+147.075000+ 141.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5773'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.56,38.23,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0NXA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Warsaw<br>
+147.075000+ 127.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5774'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.43436100,38.21538900,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KC0ROS</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Odin<br>
+147.090000+ 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5775'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.62,37.27,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0MOB</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Moberly<br>
+147.090000+ 127.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5776'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.44,39.42,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0TOJ</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Independence<br>
+147.090000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5777'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.42,39.09,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KB0TLL</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Imperial<br>
+147.105000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5778'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.38,38.37,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0HV</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Raymore<br>
+147.120000+ 151.4<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5780'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.45,38.80,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WA0FYA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Washington<br>
+147.240000+ 141.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=5817'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.04,38.48,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0DAN</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Dexter<br>
+147.150000+ 100.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=6214'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-89.95,36.84,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0NXA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Republic<br>
+442.425000+ 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=6262'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.49,37.13,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0NXA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Republic<br>
+224.280000- 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=6263'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.49,37.13,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0IN</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Joplin<br>
+147.210000+ 91.5<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=6332'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.53996400,37.02138200,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0NXA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Conway<br>
+145.470000- <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=6468'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.82916700,37.50199890,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0LH</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Eldridge<br>
+146.700000- 88.5<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=6469'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.75,37.83,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WB0QXW</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Saint Louis<br>
+444.150000+ 146.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=6600'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.24430084,38.59189987,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KC0QA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Springfield<br>
+444.050000+ 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=7022'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.31,37.25,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KM0HP</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Holden<br>
+444.525000+ 107.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=7275'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.99,38.71,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KM0HP</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Lee&#039;s Summit<br>
+444.775000+ 151.4<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=7276'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.34033800,38.89056100,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0DCA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Ongo<br>
+145.150000- 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=7946'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.89409637,36.99060059,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KB4VSP</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Holts Summit<br>
+444.875000+ 127.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=7978'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.12830353,38.65760040,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KC0VA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Kansas City<br>
+443.500000+ 151.4<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=7982'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.52629852,39.06349945,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0AU</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Holden<br>
+443.200000+ 107.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=7988'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.92228400,38.70686100,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0GS</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Rolla<br>
+145.130000- 88.5<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=8000'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.79,37.95,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KM0HP</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Bloomfield<br>
+147.330000+ 100.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=8020'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-89.90,36.93,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0WCR</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Piedmont<br>
+147.375000+ 100.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=8156'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.69,37.13,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0WNC</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Potosi<br>
+444.400000+ 100.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=8157'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.78790283,37.93640137,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0WJB</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Kansas City<br>
+443.450000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=8525'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.58,39.10,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0PM</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Springfield<br>
+442.375000+ <br>
+On-air: No<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=8538'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.31980133,37.16350174,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WB0OKX</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Bethany<br>
+443.075000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=8580'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.03,40.27,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0AMJ</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Excelsior Springs<br>
+443.325000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=8581'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.23,39.34,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KC0QLU</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Plattsburg <br>
+444.675000+ 107.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=8582'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.44799805,39.56560135,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KD0ETV</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Marceline<br>
+443.150000+ 110.9<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=8583'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.95,39.71,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KM0HP</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Marshall Junction<br>
+442.175000+ 127.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=8584'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.15299988,38.95610046,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WB0OKX</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Rockport<br>
+444.775000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=8586'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-95.52,40.41,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KM0HP</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Saint Joseph<br>
+443.950000+ 151.4<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=8587'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.84,39.76,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>AA0IY</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Barnett<br>
+442.925000+ 127.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=8588'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.67,38.38,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0NXA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Bolivar<br>
+443.675000+ 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=8674'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.46250000,37.62555500,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WX0GCS</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Springfield<br>
+146.640000- 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=8768'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.23125000,37.23987800,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0NWS</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Buffalo<br>
+147.180000+ 136.5<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=8780'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.09418000,37.55331000,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KB0VBN</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Blue Springs<br>
+444.950000+ 107.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=8877'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.26300049,38.99399948,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>AA0RC</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Centralia<br>
+443.025000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=9004'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.14,39.21,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0MJ</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Saint Louis<br>
+443.775000+ 141.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=9288'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.19570160,38.62770081,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0HL</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Nevada<br>
+147.135000+ 91.5<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=9479'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.35,37.84,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KD0PVP</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Butler<br>
+147.225000+ 91.5<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=9480'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.33049774,38.25859833,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0MRM</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Excelsior Springs<br>
+53.290000s 146.2<br>
+On-air: Unknown<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=9523'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.23,39.34,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WB0HSI</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Saint Charles<br>
+444.650000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=9598'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.50589752,38.78219986,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0ECA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+O&#039;Fallon<br>
+444.475000+ 141.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=9599'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.69200134,38.77600098,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0SI</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Columbia<br>
+444.425000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=9600'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.32199860,38.94800186,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KB4VSP</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Jefferson City<br>
+443.175000+ 127.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=9601'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.21330261,38.55189896,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>AD0JA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+High Hill<br>
+444.025000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=9602'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.38119600,38.87858500,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WD0EFP</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Saint Louis<br>
+443.475000+ 77.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=9603'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.23780060,38.62229919,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0SLW</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Saint Louis<br>
+147.390000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=9604'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.44650269,38.64440155,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WA0EMA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Warrenton<br>
+147.330000+ 123.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=9605'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.20330048,38.83300018,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0SRC</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Clayton<br>
+442.100000+ 141.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=9606'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.34179688,38.64739990,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0KE</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Bridgeton<br>
+443.450000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=9639'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.43409729,38.75070190,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0AMC</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Barnhart<br>
+443.725000+ 192.8<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=9783'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.39,38.34,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0WNC</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Potosi<br>
+147.195000+ 141.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=9784'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.79,37.94,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0PM</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Springfield<br>
+147.225000+ 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=9833'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.31980133,37.16350174,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WB0OKX</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Saint Joseph<br>
+444.925000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10051'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.84,39.76,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0NXA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Crane<br>
+442.150000+ 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10175'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.56433100,36.91446400,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0EI</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Kimberling City<br>
+147.345000+ 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10181'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.42,36.63,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0NXA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Springfield<br>
+147.015000+ 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10182'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.13969000,37.20467000,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0MDG</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Saint Louis<br>
+224.980000- 141.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10208'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.44644900,38.64547300,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KD0MRV</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Greenville<br>
+145.230000- 123.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10233'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.45,37.13,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0EI</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Kimberling City<br>
+444.300000+ 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10528'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.41690063,36.63339996,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0TRI</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Branson<br>
+147.195000+ 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10529'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.25980600,36.70547200,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0TRI</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Forsyth<br>
+147.150000+ 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10530'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.09194400,36.69111100,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0KQG</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Saint Charles<br>
+443.250000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10592'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.51,38.79,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KC0MV</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Millersburg<br>
+147.315000+ 127.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10593'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.05750000,38.90416700,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0GYE</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Eldon<br>
+224.580000- CSQ<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10613'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.58,38.35,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0EEA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Saint Paul<br>
+224.660000- <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10614'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.74,38.86,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KB0WCY</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Hermann<br>
+147.135000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10621'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.43320500,38.65503500,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0FLC</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Saint Louis<br>
+147.225000+ CSQ<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10624'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.43370056,38.44319916,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KA0GFC</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Boonville<br>
+444.700000+ 77.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10628'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.74,38.97,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WX0BC</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Ashland<br>
+444.175000+ 107.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10629'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.31400299,38.76900101,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KA0GFC</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Boonville<br>
+442.700000+ 77.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10630'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.74,38.97,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0BRC</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Boonville<br>
+147.360000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10632'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.74,38.97,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KD0JOX</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Cuba<br>
+147.345000+ 110.9<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10634'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.39,38.05,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KD0RIS</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Festus<br>
+443.625000+ 100.0<br>
+On-air: No<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10635'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.36604964,38.20249868,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0MA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Saint Louis<br>
+442.875000+ 141.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10636'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.34519958,38.76169968,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0RBR</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+O&#039;Fallon<br>
+444.275000+ 100.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10637'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.69999695,38.82139969,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0MDG</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Saint Louis<br>
+442.700000+ 141.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10638'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.39680400,38.67384900,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0MDG</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Saint Louis<br>
+442.575000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10639'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.40290070,38.68050003,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0MOB</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Moberly<br>
+443.975000+ CSQ<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10641'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.44,39.42,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KM0HP</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Renick<br>
+145.290000- 127.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10646'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.41709900,39.34410095,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KN0D</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Eminence<br>
+145.310000- 100.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10647'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.36,37.15,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WB0WMM</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Marshall<br>
+147.165000+ 127.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10649'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.20,39.12,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KD0IM</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Bunker<br>
+147.270000+ 156.7<br>
+On-air: No<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10651'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.21,37.46,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0WNC</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Viburnum<br>
+147.300000+ 110.9<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10654'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.14,37.72,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KD0CNC</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Warsaw<br>
+147.300000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10655'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.35489655,38.17890167,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>AK0C</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Walnut Grove<br>
+147.330000+ 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10656'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.55,37.41,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WA0QFJ</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Kansas City<br>
+147.330000+ 151.4<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10657'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.66320038,39.27769852,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0CIT</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Brookfield<br>
+147.345000+ 110.9<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10658'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.09166300,39.78076000,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KD0KIB</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Viburnum<br>
+442.050000+ 100.0<br>
+On-air: Unknown<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10661'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.14,37.72,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KA0FKL</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Hoover<br>
+442.075000+ 151.4<br>
+On-air: Unknown<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10662'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.67,39.37,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WX0BC</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Columbia<br>
+442.325000+ CSQ<br>
+On-air: No<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10664'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.33,38.95,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0ATT</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Kirkwood<br>
+147.150000+ 141.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10666'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.41,38.58,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0NXA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Deepwater<br>
+443.300000+ 107.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10671'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.79667000,38.26056000,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0BYU</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Kingston<br>
+443.375000+ 192.8<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10672'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.04,39.64,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0RVC</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Defiance<br>
+443.525000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10674'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.78,38.63,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0SRC</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Olivette<br>
+443.075000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10675'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.38849640,38.67279816,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0TLE</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Windsor<br>
+443.875000+ 107.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10680'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.50800323,38.47420120,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WB0YRG</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Peculiar<br>
+444.025000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10683'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.43419647,38.75719833,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0RMS</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Cape Girardeau<br>
+444.200000+ 100.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10685'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-89.56839752,37.40489960,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0HL</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Nevada<br>
+444.225000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10688'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.35,37.84,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WA0FYA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Washington<br>
+444.350000+ 141.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10689'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.01,38.56,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0EBE</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Springfield<br>
+444.400000+ 162.2<br>
+On-air: No<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10690'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.28237000,37.20949000,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0QVO</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Osage Beach<br>
+444.500000+ 127.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10691'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.62,38.15,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KC0LAT</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Kennett<br>
+444.575000+ 107.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10693'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.06,36.24,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0ESM</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Vibbard<br>
+444.650000+ 156.7<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10695'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.15,39.38,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0YKE</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Springfield<br>
+444.725000+ 136.5<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10696'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.28240000,37.20570000,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KB0YKI</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Ewing<br>
+444.875000+ 100.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10698'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.71,40.01,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0NXA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Stockton Lake<br>
+444.975000+ 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10700'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.91556000,37.51389000,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WB0YRG</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Chapel Hill<br>
+443.400000+ 151.4<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10703'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.03464900,38.89265700,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WB0LRX</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Sedalia<br>
+224.440000- 107.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10720'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.22010040,38.85710144,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WB0JJJ</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Gainesville<br>
+147.390000+ 110.9<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10723'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.43,36.60,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>AA0RC</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Mexico<br>
+444.825000+ 127.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10724'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.87750244,39.17240143,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0SQS</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Monett<br>
+444.650000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10733'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.83300018,36.92200089,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KA0CUU</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Arcadia<br>
+146.955000- 100.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10735'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.69499969,37.57279968,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KB0EQV</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Kearney<br>
+443.900000+ 127.3<br>
+On-air: Unknown<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10737'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.36,39.37,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KB0QWQ</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Stover<br>
+147.390000+ 127.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10739'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.99,38.39,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KB0QWQ</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Stover<br>
+444.925000+ 127.3<br>
+On-air: Unknown<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10740'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.99,38.39,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0DCA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Ongo<br>
+443.925000+ 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=10804'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.89,36.99,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KC0HJG</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Higginsville<br>
+442.950000+ 94.8<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=11056'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.73972222,39.07777800,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WB0YRG</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Kansas City<br>
+927.112500- 186.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=11345'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.58270264,39.10319901,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WB0YRG</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+North Kansas City<br>
+927.012500- 186.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=11349'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.55147530,39.15035065,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WB6ARF</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Pineville<br>
+147.075000+ 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=11359'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.38,36.59,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0GGU</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Maryville<br>
+444.475000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=11361'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.85,40.38,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0NWS</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Joplin<br>
+444.625000+ 91.5<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=11562'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.51,37.08,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0GK</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Benton<br>
+146.790000- CSQ<br>
+On-air: No<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=11594'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-89.56,37.10,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0LF</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Carthage<br>
+146.880000- 91.5<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=11597'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.31,37.18,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0WW</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Kansas City<br>
+443.275000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=11618'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.57859802,39.09970093,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0AU</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Holden<br>
+53.550000s <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=11706'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.99130249,38.71419907,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0AU</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Holden<br>
+224.880000- <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=11707'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.99130249,38.71419907,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KA0CWU</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Warrenton<br>
+147.045000+ 141.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=11833'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.22450256,38.77159882,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0QEV</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+University City<br>
+147.285000+ 141.3<br>
+On-air: No<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=11848'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.31079865,38.64879990,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0SRC</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Olivette<br>
+224.520000- 141.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=11849'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.38849640,38.67279816,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0FDG</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Washington<br>
+444.100000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=11875'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.92944400,38.51971600,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0KLX</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Festus<br>
+443.950000+ 71.9<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=12150'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.39600372,38.22060013,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KD0SAF</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Holts Summit<br>
+443.800000+ <br>
+On-air: No<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=12151'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.12,38.64,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KF0FPF</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Liberty<br>
+444.275000+ 151.4<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=12153'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.42,39.25,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WA0FYA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Union<br>
+147.180000+ 79.7<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=12175'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.93650055,38.39899826,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0OMR</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Prescott<br>
+146.850000- 114.8<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=12551'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.91,37.44,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KA0EJQ</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Monroe City<br>
+444.200000+ 141.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=12621'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.73,39.65,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0NXA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Branson<br>
+146.655000- 91.5<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=12756'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.31020000,36.66844000,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0ETY</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Jefferson City<br>
+442.150000+ 127.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=12801'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.22112811,38.55833240,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KD0ZEA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Pacific<br>
+146.450000+ 141.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=13184'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.73343400,38.40867770,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KD0ZEA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Pacific<br>
+442.300000+ 141.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=13185'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.73342000,38.40677700,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0AV</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Springfield<br>
+224.760000- 107.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=13229'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.32479858,37.17089844,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WB0OKX</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Chillicothe<br>
+444.400000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=13277'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.55,39.80,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0IN</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Carthage<br>
+145.190000- 91.5<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=13507'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.32615600,37.18116400,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0OEM</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Kansas City<br>
+443.250000+ 131.8<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=13576'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.57799700,39.10056900,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0GQ</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Raytown<br>
+442.400000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=13708'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.46944700,39.00986300,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0JD</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Harrisonville<br>
+443.700000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=13715'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.35,38.65,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WD0BBR</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Cameron<br>
+146.745000- 141.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=13745'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.24,39.74,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0QVO</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Eldon<br>
+147.270000+ 123.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=13816'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.58,38.35,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0NOE</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Sullivan<br>
+444.600000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=14249'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.16110229,38.21120071,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KJ6TQ</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Branson<br>
+443.550000+ 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=14335'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.22,36.64,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0AAP</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Bates City<br>
+444.350000+ 110.9<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=14354'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.07736500,38.96230100,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KF5E</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Peculiar<br>
+146.865000- <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=14365'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.43454200,38.75734700,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>AD0JA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Wright City<br>
+444.525000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=14383'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.02,38.83,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WA0FYA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Pacific<br>
+224.940000- 141.3<br>
+On-air: No<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=14531'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.75,38.41,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0AMC</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Arnold<br>
+444.850000+ <br>
+On-air: No<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=14582'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.41281887,38.45890045,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WB0YRG</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Independence<br>
+444.975000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=14836'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.39011620,39.12317279,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KF5E</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Peculiar<br>
+444.325000+ 151.4<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=14837'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.43454000,38.75734000,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0MDG</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Saint Louis<br>
+442.975000+ 141.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=14869'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.44644900,38.64547300,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0YKE</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Hollister<br>
+146.895000- 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=15060'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.28600311,36.56299973,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KJ6TQ</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Branson<br>
+224.100000- 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=15089'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.22,36.64,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KJ6TQ</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Branson<br>
+147.105000+ 136.5<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=15090'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.22,36.64,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WB6PQM</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Jacksonville<br>
+442.650000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=15316'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.42,39.60,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0MDG</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Saint Louis<br>
+443.550000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=15376'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.40290070,38.68050003,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WB0YRG</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Kansas City<br>
+444.462500+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=15377'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.67220306,39.27890015,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>AC0WZ</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Fulton<br>
+444.950000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=15378'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.95680000,38.83350000,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0DCA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Ava<br>
+442.750000+ 110.9<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=15402'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.66,36.95,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0DCA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Seymour<br>
+145.370000- 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=15403'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.77,37.15,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0GGM</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Salem<br>
+146.970000- 110.9<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=15466'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.58750153,37.66419983,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0SQS</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Monett<br>
+147.300000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=15467'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.93,36.93,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0EMM</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Bonne Terre<br>
+442.325000+ 151.4<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=15468'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.56,37.92,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0IQM</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Calm<br>
+442.525000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=15469'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.16,36.55,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0MGS</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Lee&#039;s Summit<br>
+443.600000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=15471'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.38,38.91,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0EQW</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Kansas City<br>
+443.050000+ <br>
+On-air: No<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=15476'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.58,39.10,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WB0JJJ</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Gainesville<br>
+444.350000+ 110.9<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=15855'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.43,36.60,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0NXA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Springfield<br>
+443.400000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=16070'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.13970300,37.20468600,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0NWS</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Macomb<br>
+146.745000- 136.5<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=16203'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.46210000,37.10780000,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0HL</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Nevada<br>
+444.000000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=16282'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.35,37.84,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KB0NHX</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Crane<br>
+927.112500- 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=16335'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.56473100,36.91464200,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KE0MQF</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Sikeston<br>
+147.210000+ 100.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=16430'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-89.55210114,36.96239853,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0NKX</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Smithville<br>
+224.460000- 151.4<br>
+On-air: Unknown<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=16483'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.58,39.39,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KB0ZAW</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Sikeston<br>
+147.075000+ 100.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=16559'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-89.59,36.88,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0GDI</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Blackwell<br>
+53.410000- 100.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=16591'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.66083333,38.07305556,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0EEE</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Rolla<br>
+443.825000+ 110.9<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=16656'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.77159882,37.95930099,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WB8SQS</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Fulton<br>
+442.950000+ <br>
+On-air: No<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=16673'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.95,38.85,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KO0OOL</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Union<br>
+443.900000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=16836'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.93648800,38.39892600,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0NXA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Branson<br>
+444.450000+ 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=16906'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.31020000,36.66844000,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0WJB</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Kansas City<br>
+443.175000+ 151.4<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=16915'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.57859802,39.09970093,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KC9SDU</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Farmington<br>
+442.525000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=17051'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.42,37.78,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KE0HWK</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Lone Jack<br>
+443.750000+ 151.4<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=17052'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.17,38.88,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0NXA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Springfield<br>
+146.685000- <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=17055'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.23125000,37.23987800,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0ATN</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Maryland Heights<br>
+426.000000s <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=17063'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.46440125,38.72119904,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0ARS</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Maryland Heights<br>
+442.375000+ 141.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=17201'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.43916321,38.72762680,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0NXA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Bolivar<br>
+145.290000- 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=17208'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.46250000,37.62555500,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0NOE</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Belle<br>
+442.600000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=17214'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.68150330,38.29669952,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W9IQ</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Seymour<br>
+145.190000- 123.0<br>
+On-air: No<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=17224'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.86494000,37.17216000,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KE0CZQ</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Washburn<br>
+444.850000+ 123.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=17253'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.97,36.59,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0CMD</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Rolla<br>
+444.000000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=17384'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.79,37.95,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>AA0RC</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Mexico<br>
+443.425000+ 127.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=17454'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.88289642,39.19919968,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>AB0TL</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Potosi<br>
+146.835000- 100.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=17548'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.79,37.94,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KD0BQS</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Arnold<br>
+442.450000+ 141.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=17571'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.38,38.43,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>AC0HA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Hermitage<br>
+146.835000- 107.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=17684'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.23639000,37.90861000,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KD0KIB</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Viburnum<br>
+147.300000+ 100.0<br>
+On-air: Unknown<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=17718'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.14,37.72,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0BYU</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Maryville<br>
+146.685000- 94.8<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=17719'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.87,40.35,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0FLC</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Saint Louis<br>
+443.150000+ <br>
+On-air: No<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=17727'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.43370056,38.44319916,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KF5QMA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Steelville<br>
+146.640000- 110.9<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=17736'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.36107860,37.95365380,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KE0UWK</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Cape Girardeau<br>
+444.450000+ 100.0<br>
+On-air: No<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=17896'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-89.52,37.31,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WB0YRG</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Trimble<br>
+146.640000- 151.4<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=18435'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.56,39.47,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0KWC</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Lamar<br>
+442.975000+ 91.5<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=18482'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.27660370,37.49499893,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0AU</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Holden<br>
+442.500000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=18739'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.92228400,38.70686100,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KB0NHX</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Springfield<br>
+1285.050000- 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=18865'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.28925000,37.13766700,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0NXA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Bendavis<br>
+444.775000+ 110.9<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=18883'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.19406000,37.29644000,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0NXA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Rolla<br>
+146.820000- 110.9<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=18884'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.78841700,37.95415400,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0NXA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Willow Springs<br>
+146.985000- 110.9<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=18885'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.98222200,37.00888900,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KB0NHX</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Springfield<br>
+444.875000+ 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=18886'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.27969800,37.14562600,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0NXA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Willow Springs<br>
+146.670000- <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=18888'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.98222000,37.00883000,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KE0CYW</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Sedalia<br>
+53.110000- 127.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=19021'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.23,38.72,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KC0KW</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Kansas City<br>
+145.490000- <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=19108'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.48,39.05,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KB0LSM</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Saint Joseph<br>
+442.750000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=19208'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.79,39.77,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WB0OBX</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Cameron<br>
+443.425000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=19234'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.83,37.96,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KC0KW</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Smithville<br>
+146.925000- <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=19361'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.58,39.36,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KD0ETV</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Marceline<br>
+145.350000- 110.9<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=19390'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.95,39.72,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KC0KW</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Kansas City<br>
+444.700000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=19750'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.53,39.01,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WA0QFJ</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Platte City<br>
+444.550000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=19919'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.66,39.27,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>AA0RC</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Vandalia<br>
+442.125000+ 127.3<br>
+On-air: No<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=20033'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.49,39.31,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W7LN</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Richmond<br>
+443.575000+ 94.8<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=20034'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.97688760,39.27862200,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>AA0RC</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Vandalia<br>
+444.125000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=20036'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.49,39.31,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0KLX</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Festus<br>
+146.700000- 141.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=20057'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.41,38.21,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0KQG</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Defiance<br>
+146.490000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=20244'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.81,38.61,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KD0VKG</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Warrenton<br>
+444.912500+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=20245'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.15,38.80,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KE0CYW</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Cole Camp<br>
+145.110000- <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=20287'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.10831500,38.38640600,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0CBL</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Kirksville<br>
+442.525000+ 156.7<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=20317'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.58,40.26,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KB0LSM</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Savannah<br>
+444.000000+ 94.8<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=20443'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.81000000,39.85000000,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0NXA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Nixa<br>
+29.680000- 123.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=20531'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.03119200,37.04289400,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KB8VLL</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+El Dorado Springs<br>
+443.887500+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=20599'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.01231600,37.86156600,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0HL</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Nevada<br>
+146.850000- 91.5<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=20600'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.35,37.84,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0NXA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Arcadia<br>
+145.290000- 100.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=20669'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.72383300,37.56827800,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0NXA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Arcadia<br>
+442.250000+ 100.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=20670'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.72383300,37.56827800,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>AB0HX</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Park Hills<br>
+146.715000- 100.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=20831'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.52,37.85,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KC0KW</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Kansas City<br>
+145.110000- <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=21037'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.58,39.17,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KC0KW</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Lee&#039;s Summit<br>
+442.825000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=21038'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.36,38.97,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0LBR</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Odessa<br>
+443.650000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=21039'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.96,39.01,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KB0ALL</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Hamilton<br>
+147.390000+ 146.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=21105'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.00,39.74,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KC0EHQ</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Wentzville<br>
+442.800000+ 141.3<br>
+On-air: No<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=21158'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.84,38.84,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KE0PKD</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Lexington<br>
+444.375000+ 151.4<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=21258'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.88200000,39.18500000,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0OAR</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Freistatt<br>
+444.150000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=21301'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.87139000,37.00139000,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KB0LSM</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Excelsior Springs<br>
+443.825000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=21826'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.16,39.34,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N8WIZ</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Park Hills<br>
+145.190000- 100.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=21861'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.62,37.86,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0NXA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Springfield<br>
+444.575000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=21920'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.13970300,37.20468600,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0NXA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Springfield<br>
+443.900000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=21921'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.13970300,37.20468600,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0HCA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+West Plains<br>
+444.425000+ 110.9<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=21965'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-91.87471120,36.72781530,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0AV</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Springfield<br>
+147.120000+ 107.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=21999'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.33263165,37.29824547,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0HAM</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Kansas City<br>
+146.940000- <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=22038'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.59,39.07,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0NXA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Golden City<br>
+444.750000+ 91.5<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=22075'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.16370000,37.36610000,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name></name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Lee&#039;s Summit<br>
+145.410000- <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=22084'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.38,38.91,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0NXA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Springfield<br>
+442.400000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=22099'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.13970300,37.20468600,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0NXA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Springfield<br>
+442.925000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=22100'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.13970300,37.20468600,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0NWP</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Highlandville<br>
+443.250000+ 91.5<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=22161'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.28,36.93,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KA0SPM</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Springfield<br>
+444.825000+ 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=22164'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.23405000,37.19185000,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KB0LSM</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Sedalia<br>
+444.150000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=22183'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.23,38.71,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0ACA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Moscow Mills<br>
+443.350000+ 141.3<br>
+On-air: Unknown<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=22184'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.92611100,38.96277800,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0NWS</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Branson<br>
+145.410000- 136.5<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=22200'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.22,36.66,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KB0LSM</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Cameron<br>
+443.850000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=22477'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.19,39.75,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KE0CZQ</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Washburn<br>
+147.375000+ 123.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=22537'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.02,36.58,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>AF0SS</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Mount Vernon<br>
+147.045000+ 118.8<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=22630'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.85483000,37.05767000,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0CEH</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Clayton<br>
+444.000000+ 114.8<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=22632'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.32,38.64,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KB9TQJ</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Cross Timbers<br>
+443.850000+ 107.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=22656'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.23,38.02,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0NXA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Carthage<br>
+443.775000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=22673'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.31022280,37.17644700,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0NXA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Golden City<br>
+146.790000- 91.5<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=22687'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.16412000,37.36627200,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KD4EFM</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Springfield<br>
+444.025000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=22835'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.28055840,37.14398700,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KC0KW</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Kansas City<br>
+442.900000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=22969'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.58,39.31,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0AMC</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Barnhart<br>
+52.950000- 192.8<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=23037'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.39,38.34,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WB0YRG</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Pleasant Hill<br>
+146.450000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=23039'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.27,38.79,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KA0KDW</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Macks Creek<br>
+147.255000+ D165<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=23040'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.89358000,37.97514000,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0OZK</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Fredericktown<br>
+145.150000- 100.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=23126'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-90.29,37.56,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KC0QA</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Springfield<br>
+145.250000- CSQ<br>
+On-air: Unknown<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=23153'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.30,37.25,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KB0LSM</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Holden<br>
+444.575000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=23169'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.03465800,38.89277800,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KB0LSM</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Holden<br>
+443.800000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=23170'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.03465800,38.89277800,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0NH</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Saint Joseph<br>
+444.825000+ 100.0<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=23171'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.85,39.77,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KB0LSM</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Richmond<br>
+442.850000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=23473'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.98,39.28,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name></name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Liberty<br>
+444.100000+ 94.8<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=23511'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.42,39.25,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0BYU</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Gallatin<br>
+147.565000x 192.8<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=23520'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.96,39.91,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0RLV</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Macks Creek<br>
+444.075000+ 127.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=23654'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.89358000,37.97514000,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>WX0BC</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Columbia<br>
+927.512500- D306<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=24076'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-92.26,38.89,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0NWS</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Springfield<br>
+147.285000+ 136.5<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=24121'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.29117253,37.22432232,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>K0BSJ</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Pleasant Hill<br>
+146.625000- 151.4<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=24174'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.23,38.80,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>N0NMS</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Joplin<br>
+443.500000+ <br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=24204'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-94.52464400,37.09106400,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>W0TRI</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Branson<br>
+444.950000+ 162.2<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=24211'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.22,36.65,0</coordinates>
+</Point>
+</Placemark>
+<Placemark>
+<name>KF0ULO</name>
+<styleUrl>#IDLE</styleUrl>
+<description><![CDATA[
+Marshall<br>
+146.685000- 127.3<br>
+On-air: Yes<br>
+<a href='https://www.repeaterbook.com/repeaters/details.php?state_id=29&ID=24294'>Click for Details</a>
+]]></description>
+<Point>
+<coordinates>-93.21,39.09,0</coordinates>
+</Point>
+</Placemark>
+</Document>
+</kml>

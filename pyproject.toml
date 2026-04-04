@@ -1,0 +1,16 @@
+[project]
+name = "radiod-monitor"
+version = "0.1.0"
+description = "Unified web frontend for monitoring and streaming from ka9q-radio's radiod, with pluggable frequency sources."
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "websockets",
+    "maidenhead",
+    "pydantic>=2.0",
+    "ka9q-python>=3.4.2",
+]
+
+[tool.setuptools]
+packages = ["backend", "backend.sources"]
