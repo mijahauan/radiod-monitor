@@ -8,12 +8,14 @@ new sources need to be wired in.
 from typing import Dict
 
 from .base import Source, Station
+from .fm import FmSource
 from .nws import NwsSource
 from .repeaters import RepeaterSource
 
 _SOURCES: Dict[str, Source] = {
     NwsSource.key: NwsSource(),
     RepeaterSource.key: RepeaterSource(),
+    FmSource.key: FmSource(),
 }
 
 

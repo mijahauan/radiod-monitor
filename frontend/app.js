@@ -38,7 +38,8 @@ let markers = {};           // freq_hz -> Leaflet Marker
 let stationsData = [];
 let wsControl;
 let currentMode = '';
-let sourcesSchema = {};     // key -> {display_name, controls, preset}
+let currentAudioChannels = 1;   // set from each results message
+let sourcesSchema = {};     // key -> {display_name, controls, preset, audio_channels}
 
 // Marker icons
 const defaultIcon = L.divIcon({
@@ -265,6 +266,10 @@ function clearStations() {
 function handleSearchResults(data) {
     stationsData = data.stations || [];
     repeaterCount.textContent = stationsData.length;
+    // Remember the channel count the backend is emitting for this mode so
+    // listenToStation can configure the WebCodecs AudioDecoder correctly.
+    // wfm is stereo (2 channels), everything else is mono.
+    currentAudioChannels = data.audio_channels || 1;
 
     if (data.lat !== undefined && data.lon !== undefined) {
         map.setView([data.lat, data.lon], 9);
@@ -278,7 +283,7 @@ function handleSearchResults(data) {
 
     for (const st of stationsData) {
         const marker = L.marker([st.lat, st.lon], { icon: defaultIcon }).addTo(map);
-        marker.bindPopup(renderPopup(st));
+        marker.bindPopup(buildPopup(st));
         markers[st.freq_hz] = marker;
 
         const li = document.createElement('li');
@@ -303,20 +308,39 @@ function handleSearchResults(data) {
     }
 }
 
-function renderPopup(st) {
-    const extras = Object.entries(st.extra || {})
-        .filter(([, v]) => v !== '' && v != null)
-        .map(([k, v]) => `<p><strong>${escapeHtml(k)}:</strong> ${escapeHtml(String(v))}</p>`)
-        .join('');
-    return `
-        <div class="dark-popup">
-            <h4>${escapeHtml(st.name)}</h4>
-            <p><strong>Freq:</strong> ${(st.freq_hz / 1e6).toFixed(3)} MHz</p>
-            ${extras}
-            <button onclick="listenToStation(${st.freq_hz}, ${JSON.stringify(st.name)})"
-                style="margin-top:10px; padding:5px; font-size:0.8rem;">Listen Live</button>
-        </div>
-    `;
+function buildPopup(st) {
+    // Build the popup as a real DOM element rather than an HTML string so
+    // we can attach a proper click handler. Interpolating st.name into an
+    // inline onclick="..." attribute breaks as soon as the name contains
+    // anything that clashes with the outer quoting.
+    const root = document.createElement('div');
+    root.className = 'dark-popup';
+
+    const h = document.createElement('h4');
+    h.textContent = st.name;
+    root.appendChild(h);
+
+    const freqP = document.createElement('p');
+    freqP.innerHTML = `<strong>Freq:</strong> ${(st.freq_hz / 1e6).toFixed(3)} MHz`;
+    root.appendChild(freqP);
+
+    for (const [k, v] of Object.entries(st.extra || {})) {
+        if (v === '' || v == null) continue;
+        const p = document.createElement('p');
+        const strong = document.createElement('strong');
+        strong.textContent = `${k}: `;
+        p.appendChild(strong);
+        p.appendChild(document.createTextNode(String(v)));
+        root.appendChild(p);
+    }
+
+    const btn = document.createElement('button');
+    btn.textContent = 'Listen Live';
+    btn.style.cssText = 'margin-top:10px; padding:5px; font-size:0.8rem;';
+    btn.addEventListener('click', () => listenToStation(st.freq_hz, st.name));
+    root.appendChild(btn);
+
+    return root;
 }
 
 function handleActivityUpdate(data) {
@@ -373,8 +397,9 @@ const MIN_BUFFER_PACKETS = 5;   // ~100 ms jitter buffer
 const START_DELAY_SEC = 0.15;
 
 class AudioSession {
-    constructor(freqHz) {
+    constructor(freqHz, numChannels) {
         this.freqHz = freqHz;
+        this.numChannels = numChannels || 1;
         this.ws = null;
         this.audioContext = null;
         this.decoder = null;
@@ -398,10 +423,12 @@ class AudioSession {
             output: (audioData) => this._onDecoded(audioData),
             error: (e) => console.error('AudioDecoder error:', e),
         });
+        // The decoder's numberOfChannels must match what radiod is emitting
+        // for this source's preset. WFM is stereo (2), nfm/am/etc are mono (1).
         this.decoder.configure({
             codec: 'opus',
             sampleRate: AUDIO_SAMPLE_RATE,
-            numberOfChannels: 1,
+            numberOfChannels: this.numChannels,
         });
 
         const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -481,7 +508,7 @@ function listenToStation(freqHz, name) {
     audioPanel.classList.remove('hidden');
     resumeAudioBtn.classList.add('hidden');
 
-    const session = new AudioSession(freqHz);
+    const session = new AudioSession(freqHz, currentAudioChannels);
     currentSession = session;
     session.start().catch(err => {
         console.error('Audio start failed:', err);

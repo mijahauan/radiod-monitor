@@ -59,8 +59,16 @@ class Source:
     display_name: str = ""
 
     # Demod preset passed to radiod ensure_channel. Most sources use nfm;
-    # future sources for airband would use "am", HF for "usb"/"lsb", etc.
+    # airband sources would use "am", HF for "usb"/"lsb", broadcast FM
+    # uses "wfm" (which radiod forces to 48 kHz stereo output).
     preset: str = "nfm"
+
+    # Number of audio channels radiod emits for this preset. Almost every
+    # preset is mono; "wfm" is stereo (forced to 48 kHz stereo by the
+    # ka9q-radio preset definition). The frontend uses this to configure
+    # its WebCodecs AudioDecoder, so it must match what radiod emits or
+    # the decoder will error out on the first packet.
+    audio_channels: int = 1
 
     def controls_schema(self) -> Dict[str, Any]:
         """

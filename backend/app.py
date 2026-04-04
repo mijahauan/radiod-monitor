@@ -191,6 +191,7 @@ async def sources():
                 "key": s.key,
                 "display_name": s.display_name,
                 "preset": s.preset,
+                "audio_channels": s.audio_channels,
                 "controls": s.controls_schema(),
             }
             for s in source_registry.all_sources().values()
@@ -253,6 +254,8 @@ async def _handle_search(websocket: WebSocket, data: Dict[str, Any]):
     await websocket.send_json({
         "type": "results",
         "mode": mode,
+        "preset": source.preset,
+        "audio_channels": source.audio_channels,
         "lat": lat,
         "lon": lon,
         "stations": [s.to_dict() for s in stations],
@@ -260,7 +263,12 @@ async def _handle_search(websocket: WebSocket, data: Dict[str, Any]):
 
     # ensure_channel is blocking; fire-and-forget off the event loop.
     asyncio.create_task(
-        asyncio.to_thread(controller.apply_stations, stations, source.preset)
+        asyncio.to_thread(
+            controller.apply_stations,
+            stations,
+            source.preset,
+            source.audio_channels,
+        )
     )
 
 

@@ -9,6 +9,7 @@ Supersedes the older `nws-monitor` and `repeater-monitor` apps by unifying their
 - **Pluggable monitoring modes.** Each "mode" is a Python class (a `Source`) that knows its frequencies, the front-end tune target, and any per-source UI controls. Ships with:
     - **NOAA Weather Radio** — 7-channel NWR band, filtered by distance.
     - **VHF/UHF Amateur Repeaters** — RepeaterBook KML, filtered by distance and band segment (2m / 1.25m / 70cm).
+    - **Commercial FM** — US FCC CDBS database (~11,000 stations), filtered by distance and 5 MHz band segment. Uses radiod's `wfm` preset (75 µs de-emphasis, 48 kHz stereo).
 - **Radiod instance discovery.** The sidebar dropdown lists every radiod instance advertising `_ka9q-ctl._udp` on the LAN (via mDNS). Switch between SDRs — for example, an Airspy R2 for VHF and an RX888 for HF — from the browser without restarting anything.
 - **Live activity indication.** A background task polls radiod's per-channel SNR every 2 s; map markers and the sidebar list flip to "active" green above a configurable threshold and back to idle blue when silent.
 - **Low-latency browser audio.** Raw Opus frames (20 ms @ 48 kHz mono) are forwarded over WebSocket and decoded with the browser's native WebCodecs `AudioDecoder`, scheduled on a Web Audio `AudioContext`. No Ogg muxing, no server-side decoding, ~100 ms jitter buffer.
@@ -35,7 +36,8 @@ FastAPI + Uvicorn  (backend/)
   └── sources/             — pluggable frequency providers
       ├── base.py          — Source protocol, Station dataclass
       ├── nws.py           — NOAA Weather Radio
-      └── repeaters.py     — VHF/UHF amateur repeaters (KML)
+      ├── repeaters.py     — VHF/UHF amateur repeaters (KML)
+      └── fm.py            — US commercial FM broadcast (CDBS)
   │
 ka9q-python
   │
@@ -51,6 +53,7 @@ class MySource(Source):
     key = "my_source"                  # registry key
     display_name = "My Frequencies"    # shown in the mode dropdown
     preset = "nfm"                     # radiod demod preset
+    audio_channels = 1                 # 2 for wfm (stereo), 1 otherwise
 
     def controls_schema(self) -> dict:
         """Optional UI controls (e.g. band segment selector)."""
@@ -119,16 +122,36 @@ The browser's WebCodecs `AudioDecoder` is only available in a **secure context**
 
 The `certs/` directory is git-ignored.
 
-## Repeater Data
+## Data Sources
 
-The repeater source loads `data/repeaters*.kml`, a KML export from [RepeaterBook](https://www.repeaterbook.com). A starter file is included but will get stale over time; the app logs a warning at load time if the file is older than 180 days.
+Each non-trivial Source has its own dataset. These ship with the repo as starter files so the app works on first run; refresh them from the upstream sources when you want current data.
 
-To refresh:
+### Repeaters — `data/repeaters*.kml`
+
+A KML export from [RepeaterBook](https://www.repeaterbook.com). The app logs a warning at load time if the file is older than 180 days.
 
 1. Go to <https://www.repeaterbook.com/repeaters/index.php>.
 2. Use "Advanced Search" to filter by state/region/band as desired.
 3. On the results page, choose "Export this listing" → "KML".
 4. Replace `data/repeaters.kml` with the download (any filename matching `data/repeaters*.kml` works; newest mtime wins).
+
+### Commercial FM — `data/fm_stations.json`
+
+Compiled from the FCC's CDBS [`facility.zip`](https://transition.fcc.gov/Bureaus/MB/Databases/cdbs/facility.zip) and [`fm_eng_data.zip`](https://transition.fcc.gov/Bureaus/MB/Databases/cdbs/fm_eng_data.zip) public files, joined on `facility_id`. Live licensed FM stations only, with callsign, frequency, and transmitter lat/lon. US coverage plus coordinated Canadian and Mexican border stations (~11,000 entries).
+
+To refresh:
+
+```bash
+venv/bin/python scripts/fetch_fm_stations.py
+```
+
+This downloads both CDBS zips (~15 MB total), joins them, filters to the 88–108 MHz FM broadcast band, and writes `data/fm_stations.json`. Takes about 30 seconds on a normal connection.
+
+**Note on staleness:** CDBS was frozen on 2023-10-01 when the FCC migrated broadcast licensing to LMS, so the data is stable but not actively updated. For "what's on the air today" this is fine — broadcast FM assignments change on the scale of years. If you need fresh data, LMS bulk downloads exist but are substantially more complex to parse (SQL dumps rather than pipe-delimited tables); a future revision of this script could target LMS if the need arises.
+
+### NOAA Weather Radio — `data/nws_stations.json`
+
+Small curated list of NWR transmitters with coordinates. Manual update — there is no authoritative public bulk source. The 7 standard frequencies are hardcoded as a fallback when no station is within the selected radius.
 
 ## Controls
 

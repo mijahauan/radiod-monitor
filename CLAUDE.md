@@ -37,10 +37,13 @@ This is the unified successor to the sibling projects `../nws-monitor` and `../r
   - `center_freq_hz(params) -> float` — radiod front-end center frequency for the given params.
   - `list_stations(lat, lon, radius_km, params) -> list[Station]`.
 
-Registry lives in [backend/sources/__init__.py](backend/sources/__init__.py); adding a new source is one import + one entry in `_SOURCES`. Two sources ship:
+Registry lives in [backend/sources/__init__.py](backend/sources/__init__.py); adding a new source is one import + one entry in `_SOURCES`. Three sources ship:
 
-- **`NwsSource`** ([backend/sources/nws.py](backend/sources/nws.py)) — loads `data/nws_stations.json`, 7-channel NWR band centered on 162.475 MHz, no per-source controls. Falls back to the 7 standard frequencies at the user's exact location if no station is within range, so the audio pipeline is still exercisable.
-- **`RepeaterSource`** ([backend/sources/repeaters.py](backend/sources/repeaters.py)) — loads `data/repeaters*.kml` (RepeaterBook export, newest mtime wins), filters by distance and band segment, center frequency = midpoint of the selected segment. Parses callsign, downlink frequency, offset sign, and PL tone from the KML description CDATA. Warns at load time if the KML is >180 days old.
+- **`NwsSource`** ([backend/sources/nws.py](backend/sources/nws.py)) — loads `data/nws_stations.json`, 7-channel NWR band centered on 162.475 MHz, no per-source controls, preset `nfm`. Falls back to the 7 standard frequencies at the user's exact location if no station is within range, so the audio pipeline is still exercisable.
+- **`RepeaterSource`** ([backend/sources/repeaters.py](backend/sources/repeaters.py)) — loads `data/repeaters*.kml` (RepeaterBook export, newest mtime wins), filters by distance and band segment, center frequency = midpoint of the selected segment, preset `nfm`. Parses callsign, downlink frequency, offset sign, and PL tone from the KML description CDATA. Warns at load time if the KML is >180 days old.
+- **`FmSource`** ([backend/sources/fm.py](backend/sources/fm.py)) — loads `data/fm_stations.json` (compiled by [scripts/fetch_fm_stations.py](scripts/fetch_fm_stations.py) from the FCC CDBS public files), filters by distance and 5 MHz band segment (88–93, 93–98, 98–103, 103–108 MHz), preset `wfm`, `audio_channels=2`. The `wfm` preset in [ka9q-radio/share/presets.conf](../ka9q-radio/share/presets.conf) forces 48 kHz **stereo** output with 75 µs North American de-emphasis.
+
+**About the `audio_channels` attribute.** Added to `Source` so the frontend can configure `AudioDecoder` with the right channel count. `nfm`, `am`, etc. are mono (`1`); `wfm` is stereo (`2`). The value is threaded through: `Source.audio_channels` → reported in `GET /api/sources` and in each `{type: "results"}` control WebSocket message → stored in the frontend's `currentAudioChannels` → passed to `new AudioSession(freq, currentAudioChannels)` → `AudioDecoder.configure({numberOfChannels: …})`. If it doesn't match what radiod is emitting, WebCodecs throws on the first packet.
 
 ### Shared pipeline
 
@@ -56,7 +59,7 @@ Identical in shape to the aligned nws-monitor/repeater-monitor, just generalized
 
 ### Frequency→SSRC coupling (the one cross-file invariant)
 
-`RadioController.apply_stations` and `AudioStreamer.add_listener` both call `ensure_channel`/`ManagedStream` and must pass *identical* `destination`, `encoding`, `sample_rate`, `preset`, and `gain=0.0`. `AudioStreamer` reads `preset` and `sample_rate` off the controller at stream creation time to keep them in lockstep. If you change how preset is selected (e.g. per-station instead of per-source), change it in both places and through the controller's `preset` attribute.
+`RadioController.apply_stations` and `AudioStreamer.add_listener` both call `ensure_channel`/`ManagedStream` and must pass *identical* `destination`, `encoding`, `sample_rate`, `preset`, and `gain=0.0`. `AudioStreamer` reads `preset` and `sample_rate` off the controller at stream creation time to keep them in lockstep. If you change how preset is selected (e.g. per-station instead of per-source), change it in both places and through the controller's `preset` attribute. The same is true of `audio_channels` — it's stored on the controller by `apply_stations()` and reported to the frontend, and it must reflect what radiod actually emits for the configured preset.
 
 ### Host switching
 

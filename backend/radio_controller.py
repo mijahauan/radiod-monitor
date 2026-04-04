@@ -36,6 +36,11 @@ class RadioController:
         # Active preset — set by apply_stations() from the current Source.
         self.preset: str = "nfm"
         self.sample_rate: int = 48000
+        # Number of audio channels the current preset emits (1 for all
+        # narrow-band modes, 2 for wfm). AudioStreamer reads this when
+        # creating new ManagedStreams; the frontend reads it via
+        # /api/sources to configure WebCodecs AudioDecoder.
+        self.audio_channels: int = 1
 
     async def connect(self):
         try:
@@ -71,7 +76,12 @@ class RadioController:
         except Exception as e:
             logger.warning(f"Failed to tune front end to {center_freq_hz/1e6:.3f} MHz: {e}")
 
-    def apply_stations(self, stations: Iterable[Station], preset: str = "nfm"):
+    def apply_stations(
+        self,
+        stations: Iterable[Station],
+        preset: str = "nfm",
+        audio_channels: int = 1,
+    ):
         """
         Ensure radiod channels exist for the given Station set, remove any
         channels no longer in it. Mutates self.active_channels.
@@ -81,6 +91,7 @@ class RadioController:
             return
 
         self.preset = preset
+        self.audio_channels = audio_channels
 
         new_freqs: set = set()
         for st in stations:
