@@ -419,17 +419,17 @@ class AudioSession {
         if (this.audioContext.state === 'suspended') {
             try { await this.audioContext.resume(); } catch (_) {}
         }
+        this._rxCount = 0;
+        this._decodeErrCount = 0;
         this.decoder = new AudioDecoder({
             output: (audioData) => this._onDecoded(audioData),
-            error: (e) => console.error('AudioDecoder error:', e),
+            error: (e) => console.error('AudioDecoder error callback:', e),
         });
-        // The decoder's numberOfChannels must match what radiod is emitting
-        // for this source's preset. WFM is stereo (2), nfm/am/etc are mono (1).
-        this.decoder.configure({
-            codec: 'opus',
-            sampleRate: AUDIO_SAMPLE_RATE,
-            numberOfChannels: this.numChannels,
-        });
+        // Configuration waits for the server's config message, which carries
+        // the channel count read from the first Opus frame's TOC byte. A
+        // count guessed from the preset is not reliable — the wfm preset
+        // ships mono in some installs and stereo in others — and a wrong
+        // numberOfChannels makes WebCodecs throw on the first packet.
 
         const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         this.ws = new WebSocket(`${proto}//${window.location.host}/ws/audio/${this.freqHz}`);
@@ -438,26 +438,71 @@ class AudioSession {
         this.ws.onerror   = (e) => console.warn('Audio WS error', e);
         this.ws.onclose   = () => console.log(`Audio WS closed for ${this.freqHz/1e6} MHz`);
         this.ws.onmessage = (ev) => {
-            if (this.stopped || !(ev.data instanceof ArrayBuffer)) return;
-            if (!this.decoder || this.decoder.state !== 'configured') return;
+            if (this.stopped) return;
+            if (typeof ev.data === 'string') {
+                this._onControlMessage(ev.data);
+                return;
+            }
+            if (!(ev.data instanceof ArrayBuffer)) return;
+            if (!this.decoder || this.decoder.state !== 'configured') {
+                // Frames that arrive before the config message have no
+                // decoder to go to. Opus frames are self-contained, so
+                // dropping the first few costs at most a few ms of audio.
+                return;
+            }
+            this._rxCount++;
+            if (this._rxCount <= 3 || this._rxCount % 100 === 0) {
+                console.log(`rx #${this._rxCount} ${this.freqHz/1e6} MHz: ${ev.data.byteLength} bytes, decoder.state=${this.decoder.state}, queue=${this.decoder.decodeQueueSize}`);
+            }
             try {
                 this.decoder.decode(new EncodedAudioChunk({
                     type: 'key',       // Opus frames are self-contained
-                    timestamp: 0,      // timestamp unused; we schedule manually
+                    timestamp: this._rxCount * 20000,  // 20 ms per frame in µs
                     data: new Uint8Array(ev.data),
                 }));
             } catch (e) {
-                console.warn('decode error', e);
+                this._decodeErrCount++;
+                if (this._decodeErrCount <= 3) console.warn('decode error', e);
             }
         };
     }
 
+    _onControlMessage(text) {
+        let msg;
+        try { msg = JSON.parse(text); } catch (_) { return; }
+        if (msg.type !== 'config' || !msg.channels) return;
+        if (!this.decoder || this.decoder.state === 'closed') return;
+        if (this.decoder.state === 'configured' && this.numChannels === msg.channels) return;
+        this.numChannels = msg.channels;
+        console.log(`${this.freqHz/1e6} MHz: configuring decoder for ${msg.channels}-channel Opus`);
+        try {
+            this.decoder.configure({
+                codec: 'opus',
+                sampleRate: AUDIO_SAMPLE_RATE,
+                numberOfChannels: msg.channels,
+            });
+        } catch (e) {
+            console.error('AudioDecoder configure failed:', e);
+        }
+    }
+
     _onDecoded(audioData) {
         if (this.stopped) { audioData.close(); return; }
-        const buffer = this.audioContext.createBuffer(
-            audioData.numberOfChannels, audioData.numberOfFrames, audioData.sampleRate);
-        for (let ch = 0; ch < audioData.numberOfChannels; ch++) {
-            audioData.copyTo(buffer.getChannelData(ch), { planeIndex: ch });
+        const numCh = audioData.numberOfChannels;
+        const numFrames = audioData.numberOfFrames;
+        if (!this._loggedFirstFrame) {
+            this._loggedFirstFrame = true;
+            console.log(
+                `first decoded frame ${this.freqHz/1e6} MHz: format=${audioData.format} ` +
+                `rate=${audioData.sampleRate} ch=${numCh} frames=${numFrames}`
+            );
+        }
+        const buffer = this.audioContext.createBuffer(numCh, numFrames, audioData.sampleRate);
+        // Ask WebCodecs for planar f32 regardless of the decoder's native layout;
+        // both Chrome and Firefox perform the conversion. This avoids the manual
+        // de-interleave path (and its off-by-ones) entirely.
+        for (let ch = 0; ch < numCh; ch++) {
+            audioData.copyTo(buffer.getChannelData(ch), { planeIndex: ch, format: 'f32-planar' });
         }
         audioData.close();
 
@@ -480,7 +525,10 @@ class AudioSession {
             src.buffer = buf;
             src.connect(this.audioContext.destination);
             const now = this.audioContext.currentTime;
-            if (this.nextPlayTime < now) this.nextPlayTime = now + 0.02;
+            if (this.nextPlayTime < now) {
+                console.warn(`audio underrun ${this.freqHz/1e6} MHz: ${((now - this.nextPlayTime)*1000).toFixed(0)} ms late`);
+                this.nextPlayTime = now + 0.02;
+            }
             src.start(this.nextPlayTime);
             this.nextPlayTime += buf.duration;
         }

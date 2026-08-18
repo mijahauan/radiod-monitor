@@ -56,6 +56,13 @@ start() {
     echo "Starting radiod-monitor on port 8443..."
     source "$VENV/bin/activate"
     cd "$APP_DIR"
+    # Roll the log if it has grown past 32 MB, keeping one previous copy.
+    # backend.log is append-only across restarts and a stuck radiod can
+    # generate a lot of it.
+    if [ -f "$LOGFILE" ] && [ "$(stat -c %s "$LOGFILE" 2>/dev/null || echo 0)" -gt 33554432 ]; then
+        mv -f "$LOGFILE" "$LOGFILE.1"
+        echo "Rotated $LOGFILE -> $LOGFILE.1"
+    fi
     nohup python3 -m backend.app >> "$LOGFILE" 2>&1 &
     echo $! > "$PIDFILE"
     echo "Started (PID $!), logging to $LOGFILE"
@@ -69,9 +76,13 @@ stop() {
     PID=$(cat "$PIDFILE")
     if kill -0 "$PID" 2>/dev/null; then
         echo "Stopping radiod-monitor (PID $PID)..."
-        kill "$PID"
+        # Kill child processes (multiprocessing workers) first, then the
+        # main process. Prevents orphan workers running stale code.
+        pkill -P "$PID" 2>/dev/null
+        kill "$PID" 2>/dev/null
         sleep 1
-        kill -0 "$PID" 2>/dev/null && kill -9 "$PID"
+        pkill -9 -P "$PID" 2>/dev/null
+        kill -0 "$PID" 2>/dev/null && kill -9 "$PID" 2>/dev/null
         echo "Stopped."
     else
         echo "Process $PID not running."

@@ -2,6 +2,63 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## General Workflow Orchestration in Any Project
+
+### 1. Plan Mode Default
+- Enter plan mode for ANY non-trivial task (3+ steps or architectural decisions)
+- If something goes sideways, STOP and re-plan immediately — don't keep pushing
+- Use plan mode for verification steps, not just building
+- Write detailed specs upfront to reduce ambiguity
+
+### 2. Subagent Strategy
+- Use subagents liberally to keep main context window clean
+- Offload research, exploration, and parallel analysis to subagents
+- For complex problems, throw more compute at it via subagents
+- One task per subagent for focused execution
+
+### 3. Self-Improvement Loop
+- After ANY correction from the user: update `tasks/lessons.md` with the pattern
+- Write rules for yourself that prevent the same mistake
+- Ruthlessly iterate on these lessons until mistake rate drops
+- Review lessons at session start for relevant project
+
+### 4. Verification Before Done
+- Never mark a task complete without proving it works
+- Diff behavior between main and your changes when relevant
+- Ask yourself: "Would a staff engineer approve this?"
+- Run tests, check logs, demonstrate correctness
+
+### 5. Demand Elegance (Balanced)
+- For non-trivial changes: pause and ask "is there a more elegant way?"
+- If a fix feels hacky: "Knowing everything I know now, implement the elegant solution"
+- Skip this for simple, obvious fixes — don't over-engineer
+- Challenge your own work before presenting it
+
+### 6. Autonomous Bug Fixing
+- When given a bug report: just fix it. Don't ask for hand-holding
+- Point at logs, errors, failing tests — then resolve them
+- Zero context switching required from the user
+- Go fix failing CI tests without being told how
+
+## Task Management
+
+1. **Plan First**: Write plan to `tasks/todo.md` with checkable items
+2. **Verify Plan**: Check in before starting implementation
+3. **Track Progress**: Mark items complete as you go
+4. **Explain Changes**: High-level summary at each step
+5. **Document Results**: Add review section to `tasks/todo.md`
+6. **Capture Lessons**: Update `tasks/lessons.md` after corrections
+
+## Core Principles
+
+- **Simplicity First**: Make every change as simple as possible. Impact minimal code.
+- **No Laziness**: Find root causes. No temporary fixes. Senior developer standards.
+- **Minimal Impact**: Changes should only touch what's necessary. Avoid introducing bugs.
+
+## Specific to this Project
+
+This is a Python web application that monitors radiod status. It uses uvicorn to serve a FastAPI backend with a simple frontend.
+
 ## Commands
 
 ```bash
@@ -12,7 +69,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - PID file: `.app.pid`. Logs: `backend.log` (append-only).
 - `start` calls `ensure_certs` which auto-generates a self-signed cert (valid 10 years, CN=`$(hostname -f)`, SANs for FQDN/localhost/127.0.0.1) on first run.
 - `uvicorn` runs with `reload=True`, so edits under `backend/` hot-reload.
-- Initial radiod host comes from `RADIOD_HOST` env var (default `airspy-status.local`); UI dropdown can override at runtime.
+- Initial radiod host comes from `RADIOD_HOST` env var (default `airspyhf-status.local`); UI dropdown can override at runtime.
+- `start` rotates `backend.log` past 32 MB to `backend.log.1`.
 
 Dependencies live in `venv/`. `ka9q-python` is typically installed as an editable local checkout from a sibling directory:
 
@@ -41,9 +99,13 @@ Registry lives in [backend/sources/__init__.py](backend/sources/__init__.py); ad
 
 - **`NwsSource`** ([backend/sources/nws.py](backend/sources/nws.py)) — loads `data/nws_stations.json`, 7-channel NWR band centered on 162.475 MHz, no per-source controls, preset `nfm`. Falls back to the 7 standard frequencies at the user's exact location if no station is within range, so the audio pipeline is still exercisable.
 - **`RepeaterSource`** ([backend/sources/repeaters.py](backend/sources/repeaters.py)) — loads `data/repeaters*.kml` (RepeaterBook export, newest mtime wins), filters by distance and band segment, center frequency = midpoint of the selected segment, preset `nfm`. Parses callsign, downlink frequency, offset sign, and PL tone from the KML description CDATA. Warns at load time if the KML is >180 days old.
-- **`FmSource`** ([backend/sources/fm.py](backend/sources/fm.py)) — loads `data/fm_stations.json` (compiled by [scripts/fetch_fm_stations.py](scripts/fetch_fm_stations.py) from the FCC CDBS public files), filters by distance and 5 MHz band segment (88–93, 93–98, 98–103, 103–108 MHz), preset `wfm`, `audio_channels=2`. The `wfm` preset in [ka9q-radio/share/presets.conf](../ka9q-radio/share/presets.conf) forces 48 kHz **stereo** output with 75 µs North American de-emphasis.
+- **`FmSource`** ([backend/sources/fm.py](backend/sources/fm.py)) — loads `data/fm_stations.json` (compiled by [scripts/fetch_fm_stations.py](scripts/fetch_fm_stations.py) from the FCC CDBS public files), filters by distance and 5 MHz band segment (88–93, 93–98, 98–103, 103–108 MHz), preset `wfm`, `audio_channels=2`. The `wfm` preset in [ka9q-radio/share/presets.conf](../ka9q-radio/share/presets.conf) forces a 384 kHz downconverter and 48 kHz output with 75 µs North American de-emphasis. **It does not force stereo** — both the repo copy and the installed `/usr/local/share/ka9q-radio/presets.conf` set `mono = yes`, which is why `audio_channels` is only a hint and the real count comes off the wire (see below).
 
-**About the `audio_channels` attribute.** Added to `Source` so the frontend can configure `AudioDecoder` with the right channel count. `nfm`, `am`, etc. are mono (`1`); `wfm` is stereo (`2`). The value is threaded through: `Source.audio_channels` → reported in `GET /api/sources` and in each `{type: "results"}` control WebSocket message → stored in the frontend's `currentAudioChannels` → passed to `new AudioSession(freq, currentAudioChannels)` → `AudioDecoder.configure({numberOfChannels: …})`. If it doesn't match what radiod is emitting, WebCodecs throws on the first packet.
+**About the `audio_channels` attribute.** Declared on `Source` and reported in `GET /api/sources` and each `{type: "results"}` message, it is a *hint* only — it seeds `AudioSession` before any audio arrives.
+
+It is not what configures the decoder, because a source cannot know the answer: the `wfm` preset ships `mono = yes` in some ka9q-radio installs and stereo in others, and `ChannelInfo` carries no channel count. A wrong `numberOfChannels` makes WebCodecs throw on the first packet, so the value has to be ground truth.
+
+The authority is the stream itself. Every Opus packet states its channel count in bit 2 of its TOC byte (RFC 6716 §3.1); `audio_streamer.opus_channels()` reads it from the first frame, and the audio WebSocket sends `{"type": "config", "channels": N}` as a text message ahead of any binary frame. The browser configures `AudioDecoder` on that message and ignores frames until it arrives (Opus frames are self-contained, so the few dropped cost a few ms). A listener joining a stream already in progress is handed the stored value on connect.
 
 ### Shared pipeline
 
@@ -53,13 +115,15 @@ Identical in shape to the aligned nws-monitor/repeater-monitor, just generalized
 
 2. **Activity monitor — [backend/app.py](backend/app.py) `activity_monitor()`.** Background task polling `discover_channels(radiod_host)` every 2 s, reading `ChannelInfo.snr`, and broadcasting `{type: "activity", freq, isActive, snr}` to all connected control-WebSocket clients. `isActive` is `snr > 3.0 dB`. Looks up channels by SSRC, falls back to frequency match within 100 Hz. This is what flips map markers green.
 
-3. **Audio plane — [backend/audio_streamer.py](backend/audio_streamer.py).** One `ManagedStream` per frequency, shared across browser listeners via `asyncio.Queue`s. radiod is configured with `Encoding.OPUS`, `sample_rate=48000`, `samples_per_packet=960` (20 ms), `deliver_interval_packets=1`; `RadiodStream._parse_samples` returns the raw payload as `bytes` and bypasses the resequencer for Opus, so `on_samples` delivers exactly one encoded frame per call. Each frame is shipped to the browser as a single WebSocket binary message on `WS /ws/audio/{freq_hz}`. No Ogg container, no tagging, no server-side decoding — WebSocket/TCP preserves frame order and the browser uses WebCodecs `AudioDecoder`. `on_stream_restored` re-applies squelch because only hash-stable parameters survive a radiod restart.
+3. **Audio plane — [backend/audio_streamer.py](backend/audio_streamer.py).** One `ManagedStream` per frequency, shared across browser listeners via `asyncio.Queue`s. radiod is configured with `Encoding.OPUS`, `sample_rate=48000`, `samples_per_packet=960` (20 ms), `deliver_interval_packets=1`, and **`raw_payloads=True`** — ka9q-python's transport mode for framed encodings, where `on_samples` receives a `List[bytes]` of undecoded RTP payloads with the resequencer bypassed (a codec frame is opaque: it can be neither concatenated nor zero-filled, and gap concealment belongs to the decoder). With `deliver_interval_packets=1` that is exactly one encoded frame per call.
+
+   **The Opus grant must be asserted, not assumed.** `ensure_channel(encoding=OPUS)` is not sufficient: radiod applies the preset's default output encoding (s16be) and honours OPUS only from a follow-up `OUTPUT_ENCODING` command. It must also be asserted *before* the receiver starts — assert it afterwards and the first packets on the socket are PCM, which is then forwarded to the browser labelled as Opus. `add_listener` therefore calls `ensure_channel` + `_assert_opus` (which verifies the grant) before constructing the `ManagedStream`, and `on_stream_restored` re-asserts it because a re-created channel comes back on the preset default. As a backstop, `_broadcast` drops any payload over 1275 bytes — the RFC 6716 maximum for a single Opus frame — and logs it, so a lost grant is loud instead of silent. Each frame is shipped to the browser as a single WebSocket binary message on `WS /ws/audio/{freq_hz}`. No Ogg container, no tagging, no server-side decoding — WebSocket/TCP preserves frame order and the browser uses WebCodecs `AudioDecoder`. `on_stream_restored` re-applies squelch because only hash-stable parameters survive a radiod restart.
 
    **WebCodecs requires a secure context** (HTTPS or `localhost`) — the shell script auto-generates a self-signed cert to satisfy this.
 
 ### Frequency→SSRC coupling (the one cross-file invariant)
 
-`RadioController.apply_stations` and `AudioStreamer.add_listener` both call `ensure_channel`/`ManagedStream` and must pass *identical* `destination`, `encoding`, `sample_rate`, `preset`, and `gain=0.0`. `AudioStreamer` reads `preset` and `sample_rate` off the controller at stream creation time to keep them in lockstep. If you change how preset is selected (e.g. per-station instead of per-source), change it in both places and through the controller's `preset` attribute. The same is true of `audio_channels` — it's stored on the controller by `apply_stations()` and reported to the frontend, and it must reflect what radiod actually emits for the configured preset.
+`RadioController.apply_stations` and `AudioStreamer.add_listener` both call `ensure_channel`/`ManagedStream` and must pass *identical* `destination`, `encoding`, `sample_rate`, `preset`, and `gain=0.0`. `AudioStreamer` reads `preset` and `sample_rate` off the controller at stream creation time to keep them in lockstep. If you change how preset is selected (e.g. per-station instead of per-source), change it in both places and through the controller's `preset` attribute. `apply_stations()` and `add_listener()` must also both assert `OUTPUT_ENCODING = OPUS` after `ensure_channel` and verify the grant — radiod otherwise serves the preset default on whichever path skipped it. `audio_channels` is *not* part of this invariant any more: it is a display hint, and the decoder is configured from the first Opus frame's TOC byte instead.
 
 ### Host switching
 
@@ -76,7 +140,9 @@ WS   /ws/control                       ← JSON messages
   ← {type: "results", mode, lat, lon, stations: [Station]}
   ← {type: "activity", freq, isActive, snr}
   ← {type: "error", message}
-WS   /ws/audio/{freq_hz}                 ← one binary message per Opus frame
+WS   /ws/audio/{freq_hz}
+  ← {"type": "config", "channels": N}   (text, once, before any audio)
+  ← one binary message per Opus frame
 ```
 
 ## Known quirks
@@ -85,3 +151,32 @@ WS   /ws/audio/{freq_hz}                 ← one binary message per Opus frame
 - **First-run radiod failure is non-fatal.** If the default radiod host is unreachable at startup, the app logs a warning and still comes up; the user can pick a different host from the dropdown.
 - **`data/repeaters*.kml`** is shipped as a starter. The KML age warning fires at 180 days. There is no built-in refresh — the user downloads a new file from RepeaterBook and drops it into `data/`.
 - **Browser autoplay gating.** The "Listen" click itself satisfies the user-gesture requirement, and the `AudioSession` class resumes the `AudioContext` immediately. If it's still suspended afterwards, the "Unmute / Resume Audio" button appears and the user clicks it.
+
+
+## radiod on this host (verified 2026-08-18)
+
+`radiod@airspyhf-generic` runs **on the same machine** as radiod-monitor and is
+configured `ttl = 0`, so it emits RTP **only on the loopback interface**. That
+is a supported configuration for a local browser and needs no change — but it
+puts a hard requirement on the client: the multicast join must cover `lo`.
+
+`ka9q-python` ≤ 3.13 joined with `imr_interface = INADDR_ANY`, which the kernel
+resolves through the routing table to the default interface (`enp3s0` here), so
+it never saw the stream — the socket was healthy and simply silent. This was the
+cause of "no audio in the browser". Current `RadiodStream._create_socket()`
+binds the group and explicitly joins loopback for exactly this case, which is
+why **the ka9q-python floor is >= 3.24.0**. Do not lower it.
+
+Measured, same channel, same moment, before the upgrade:
+
+| multicast join      | frames in 6 s |
+|---------------------|---------------|
+| `127.0.0.1`         | 401           |
+| `INADDR_ANY`        | 0             |
+
+Hardware note: `radiod@airspy-generic` (the wideband Airspy R2) crash-loops with
+`AIRSPY_ERROR_NOT_FOUND` — only the Airspy HF+ is on USB. The HF+ has 768 kHz of
+front-end bandwidth, so `FmSource`'s 5 MHz band segments and the `wfm` preset's
+384 kHz downconverter cannot work on it; VHF tunes but has no signal on an HF
+antenna. The audio pipeline is therefore exercisable end-to-end only on HF until
+the R2 is reconnected.

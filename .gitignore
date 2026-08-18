@@ -6,8 +6,9 @@ dist/
 build/
 venv/
 
-# Logs
+# Logs (including rotated ones: radiod-monitor.sh rolls backend.log -> .log.1)
 *.log
+*.log.*
 
 # Runtime
 .app.pid

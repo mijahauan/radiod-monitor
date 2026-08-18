@@ -66,7 +66,16 @@ class FmSource(Source):
     key = "fm"
     display_name = "Commercial FM"
     preset = "wfm"
-    audio_channels = 2  # ka9q-radio wfm preset forces 48 kHz stereo
+    # Hint only — the decoder is configured from the wire (see Source docs).
+    # Both the in-tree and installed wfm presets currently ship `mono = yes`,
+    # so this is 2 for installs whose preset enables stereo, and harmless
+    # where it does not.
+    audio_channels = 2
+    sample_rate = 48000  # wfm output is always 48 kHz (forced by demod)
+    # ka9q-radio's wfm demod does not publish a valid SNR (always -inf),
+    # so SNR-based squelch would clamp the channel shut and no RTP packets
+    # would ever flow. Broadcast FM doesn't need squelch anyway.
+    snr_squelch = False
 
     def __init__(self):
         self._cache: List[dict] | None = None

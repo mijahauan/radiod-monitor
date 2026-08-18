@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-DEFAULT_RADIOD_HOST = os.environ.get("RADIOD_HOST", "airspy-status.local")
+DEFAULT_RADIOD_HOST = os.environ.get("RADIOD_HOST", "airspyhf-status.local")
 
 # Match SWL-ka9q's validation — alphanumeric + dash + dot, must begin
 # with an alphanumeric. Prevents shell metacharacters or whitespace.
@@ -268,6 +268,8 @@ async def _handle_search(websocket: WebSocket, data: Dict[str, Any]):
             stations,
             source.preset,
             source.audio_channels,
+            source.snr_squelch,
+            source.sample_rate,
         )
     )
 
@@ -279,16 +281,24 @@ async def _handle_search(websocket: WebSocket, data: Dict[str, Any]):
 async def websocket_audio(websocket: WebSocket, freq_hz: float):
     """
     Streams raw Opus frames for a single monitored frequency. One binary
-    message per Opus frame (20 ms @ 48 kHz mono). WebSocket/TCP preserves
-    order; the browser feeds each message into WebCodecs AudioDecoder.
+    message per Opus frame (20 ms @ 48 kHz). WebSocket/TCP preserves order;
+    the browser feeds each message into WebCodecs AudioDecoder.
+
+    Ahead of the audio, one JSON text message carries the stream's real
+    channel count, read from the first Opus frame's TOC byte. The browser
+    cannot configure a decoder without it, and a preset-derived guess is
+    not reliable (see audio_streamer.opus_channels).
     """
     await websocket.accept()
     queue: asyncio.Queue = asyncio.Queue(maxsize=200)
     await streamer.add_listener(freq_hz, queue, controller)
     try:
         while True:
-            frame = await queue.get()
-            await websocket.send_bytes(frame)
+            item = await queue.get()
+            if isinstance(item, dict):
+                await websocket.send_json(item)
+            else:
+                await websocket.send_bytes(item)
     except WebSocketDisconnect:
         pass
     except Exception as e:
@@ -318,5 +328,6 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=8443,
         reload=True,
+        reload_dirs=[os.path.join(os.path.dirname(__file__))],
         **ssl_kwargs,
     )

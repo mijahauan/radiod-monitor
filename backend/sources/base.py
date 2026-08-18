@@ -60,15 +60,31 @@ class Source:
 
     # Demod preset passed to radiod ensure_channel. Most sources use nfm;
     # airband sources would use "am", HF for "usb"/"lsb", broadcast FM
-    # uses "wfm" (which radiod forces to 48 kHz stereo output).
+    # uses "wfm" (which radiod forces to 48 kHz output).
     preset: str = "nfm"
 
-    # Number of audio channels radiod emits for this preset. Almost every
-    # preset is mono; "wfm" is stereo (forced to 48 kHz stereo by the
-    # ka9q-radio preset definition). The frontend uses this to configure
-    # its WebCodecs AudioDecoder, so it must match what radiod emits or
-    # the decoder will error out on the first packet.
+    # Output sample rate radiod emits for this channel. This is the *output*
+    # rate (post-demod), not the demodulator IF rate — radiod's samprate
+    # setting in presets.conf is internal. wfm output is forced to 48 kHz by
+    # the demodulator regardless of the requested rate, and nfm/am default
+    # to 24 kHz/12 kHz but 48 kHz works and simplifies the pipeline.
+    sample_rate: int = 48000
+
+    # Channel count hint for the UI. It is NOT what configures the decoder:
+    # a source cannot know the answer, because the wfm preset ships
+    # `mono = yes` in some ka9q-radio installs and stereo in others, and
+    # ChannelInfo carries no channel count. The audio plane reads the truth
+    # from the first Opus frame's TOC byte and sends it to the browser --
+    # see audio_streamer.opus_channels().
     audio_channels: int = 1
+
+    # Whether SNR-based squelch is meaningful for this source. ka9q-radio's
+    # wfm demodulator does not publish a valid SNR, so SNR-squelched wfm
+    # channels never open and emit zero RTP packets — audio streams time out.
+    # Narrowband modes (nfm/am/etc) do publish SNR and benefit from squelch.
+    # When False, the controller leaves squelch wide open (power-based, very
+    # low threshold) so audio always flows.
+    snr_squelch: bool = True
 
     def controls_schema(self) -> Dict[str, Any]:
         """
