@@ -51,6 +51,17 @@ class RadioController:
         # wfm does not publish SNR so SNR-squelched channels never open.
         # Set by apply_stations() from the active Source.
         self.snr_squelch_enabled: bool = True
+        # Nominal band centre from the active Source. Advisory: radiod, not
+        # this app, decides where the front end sits (see tune_center).
+        self.band_center_hz: Optional[float] = None
+        # Frequency the front end is currently aimed at, if any listener has
+        # asked for one. Sticky: re-asserted after anything that disturbs
+        # radiod's front-end placement (see focus_on / _reassert_focus).
+        self.focused_freq_hz: Optional[float] = None
+        # Frequencies of the stations the last search asked for. This is the
+        # set the audio plane validates against -- not active_channels, which
+        # fills in gradually while channels are still being created.
+        self.monitored_freqs: set = set()
         self._apply_lock = threading.Lock()
 
     async def connect(self):
@@ -91,9 +102,86 @@ class RadioController:
                 logger.warning(f"Failed to update squelch on SSRC {ssrc:08x}: {e}")
 
     def tune_center(self, center_freq_hz: float):
-        """Store the desired front-end center; actual LO tuning happens in
-        _apply_stations_locked once we have an SSRC to route the command."""
-        self._pending_center_hz = center_freq_hz
+        """Record the source's nominal band centre. Advisory only.
+
+        This used to issue set_first_lo(). It does not any more, because
+        radiod ignores it: radiod owns front-end placement and derives it
+        from the frequencies of the channels you ask for, re-deriving it
+        whenever a channel's frequency is asserted. Measured on this radiod,
+        requesting a channel at 102.300 MHz put first_lo at 101.976 MHz --
+        identically with no LO command, with set_first_lo(102.300), and with
+        set_first_lo(100.500). The old call was a no-op that logged a
+        "Tuned front-end LO to ..." line describing something that never
+        happened.
+
+        Front-end placement is now done where it can actually be honoured:
+        focus_on(), called when a listener attaches to a station.
+        """
+        self.band_center_hz = center_freq_hz
+
+    def focus_on(self, freq_hz: float) -> bool:
+        """Pull the front end onto `freq_hz` by re-asserting that channel.
+
+        The front end covers one window at a time -- 768 kHz on the airspyhf
+        here -- while a source's band segment can be far wider (FmSource uses
+        5 MHz). Only stations inside the current window produce any RTP at
+        all; the rest sit at snr=-inf. Since radiod re-places the front end
+        to cover a channel whose frequency is asserted, asserting the one the
+        user chose is what makes it listenable.
+
+        Measured with four channels spread over 93.9-107.1 MHz: first_lo sat
+        at 106.881 MHz until set_frequency(93.900), which moved it to
+        94.119 MHz, then set_frequency(102.300) moved it to 102.081 MHz.
+
+        The cost is inherent to the hardware, not to this call: pulling the
+        window onto one station takes the others out of it, so their markers
+        go inactive while you listen.
+
+        The focus is sticky because it does not survive on its own. radiod
+        re-places the front end every time a channel's frequency is set, so
+        the tail of a search still creating channels drags the window away
+        from whatever was focused moments earlier -- measured: focus_on
+        succeeded on 102.900 MHz and the front end still ended up at 100.481
+        MHz once the remaining channels of a 34-station search were created.
+        _reassert_focus() therefore re-applies it after apply_stations.
+        """
+        self.focused_freq_hz = freq_hz
+        return self._set_focus(freq_hz)
+
+    def _set_focus(self, freq_hz: float) -> bool:
+        if not self.control:
+            return False
+        ssrc = next(
+            (s for s, f in self.active_channels.items() if abs(f - freq_hz) < 1.0),
+            None,
+        )
+        if ssrc is None:
+            logger.warning(
+                f"focus_on: {freq_hz/1e6:.3f} MHz is not in the monitored set"
+            )
+            return False
+        try:
+            self.control.set_frequency(ssrc, freq_hz)
+            logger.info(
+                f"Front end focused on {freq_hz/1e6:.3f} MHz "
+                f"(SSRC {ssrc:08x}); other stations leave the window"
+            )
+            return True
+        except Exception as e:
+            logger.warning(f"focus_on {freq_hz/1e6:.3f} MHz failed: {e}")
+            return False
+
+    def _reassert_focus(self):
+        """Re-aim the front end after channel churn has moved it."""
+        freq = self.focused_freq_hz
+        if freq is not None and any(
+            abs(f - freq) < 1.0 for f in self.active_channels.values()
+        ):
+            self._set_focus(freq)
+
+    def clear_focus(self):
+        """Stop holding the front end on a station (last listener left)."""
+        self.focused_freq_hz = None
 
     def apply_stations(
         self,
@@ -140,6 +228,11 @@ class RadioController:
         new_freqs: set = set()
         for st in stations:
             new_freqs.add(float(st.freq_hz))
+        # Published immediately, before any channel exists. The UI offers a
+        # station the moment results arrive, but creating a large station set
+        # takes a while, so validating a Listen against created channels
+        # rejects stations the user can legitimately see and click.
+        self.monitored_freqs = set(new_freqs)
 
         logger.info(
             f"Monitoring {len(new_freqs)} frequencies  preset={preset}  "
@@ -285,25 +378,44 @@ class RadioController:
             except Exception as e:
                 logger.error(f"Failed to ensure channel for {freq_hz/1e6:.3f} MHz: {e}")
 
-        # Tune the front-end LO now that we have at least one SSRC to route
-        # the command through.
-        center = getattr(self, '_pending_center_hz', None)
-        if center and self.active_channels:
-            route_ssrc = next(iter(self.active_channels))
-            try:
-                self.control.set_first_lo(route_ssrc, center)
-                logger.info(f"Tuned front-end LO to {center/1e6:.3f} MHz")
-            except Exception as e:
-                logger.warning(f"Failed to tune front-end LO: {e}")
-            self._pending_center_hz = None
+        # No front-end tuning to a band centre here: radiod places the front
+        # end from the channels it was asked for and can only cover one window
+        # at a time, so no placement satisfies a whole band segment. See
+        # tune_center() for why the old set_first_lo() call was a no-op.
+        #
+        # But every channel created above just moved the front end, so if a
+        # listener is holding a station, aim it back at them.
+        self._reassert_focus()
 
     async def close(self):
-        if self.control:
-            for ssrc in list(self.active_channels.keys()):
-                try:
-                    self.control.remove_channel(ssrc)
-                except Exception:
-                    pass
-            self.active_channels.clear()
-            self.control.close()
-            self.control = None
+        """Release every channel this app owns on radiod.
+
+        Sweeps the whole destination group rather than just active_channels.
+        Those two sets drift: a channel outlives the dict when the process is
+        killed between a create and the next search, when a host switch
+        rebuilds the controller, or when apply_stations() fired a removal that
+        radiod had not yet acted on. radiod keeps whatever it is not told to
+        drop, so anything missed here shows up as an orphan in `control`
+        forever -- which is exactly how they accumulated.
+        """
+        if not self.control:
+            return
+        dest_ip = self.destination.split(":")[0]
+        ssrcs = set(self.active_channels)
+        try:
+            for ssrc, ch in discover_channels(self.radiod_host, 1.0).items():
+                if dest_ip in (ch.multicast_address or ""):
+                    ssrcs.add(ssrc)
+        except Exception as e:
+            logger.warning(f"close: discover_channels failed, "
+                           f"removing only tracked channels: {e}")
+        for ssrc in ssrcs:
+            try:
+                self.control.remove_channel(ssrc)
+            except Exception:
+                pass
+        if ssrcs:
+            logger.info(f"Released {len(ssrcs)} channel(s) on {dest_ip}")
+        self.active_channels.clear()
+        self.control.close()
+        self.control = None

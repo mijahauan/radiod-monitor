@@ -262,8 +262,8 @@ async def _handle_search(websocket: WebSocket, data: Dict[str, Any]):
     })
 
     # ensure_channel is blocking; fire-and-forget off the event loop.
-    asyncio.create_task(
-        asyncio.to_thread(
+    async def _converge():
+        await asyncio.to_thread(
             controller.apply_stations,
             stations,
             source.preset,
@@ -271,7 +271,13 @@ async def _handle_search(websocket: WebSocket, data: Dict[str, Any]):
             source.snr_squelch,
             source.sample_rate,
         )
-    )
+        # A mode switch drops frequencies from the monitored set. Any stream
+        # still running on one of those has just had its channel deleted, and
+        # ManagedStream would otherwise keep re-creating it against the next
+        # search's removals — see AudioStreamer.drop_unmonitored.
+        await streamer.drop_unmonitored(controller.monitored_freqs)
+
+    asyncio.create_task(_converge())
 
 
 # ---------------------------------------------------------------------------
@@ -288,8 +294,26 @@ async def websocket_audio(websocket: WebSocket, freq_hz: float):
     channel count, read from the first Opus frame's TOC byte. The browser
     cannot configure a decoder without it, and a preset-derived guess is
     not reliable (see audio_streamer.opus_channels).
+
+    The frequency must be one the current search is monitoring. Without that
+    check this route creates a radiod channel at whatever frequency it is
+    handed, so anything that can open the socket can allocate channels on
+    the receiver -- and those channels then sit there, outside the set that
+    apply_stations() knows how to clean up.
     """
     await websocket.accept()
+    if not any(abs(f - freq_hz) < 1.0 for f in controller.monitored_freqs):
+        logger.warning(
+            f"Rejecting audio request for {freq_hz/1e6:.3f} MHz: "
+            f"not in the monitored set"
+        )
+        await websocket.send_json({
+            "type": "error",
+            "message": f"{freq_hz/1e6:.3f} MHz is not currently monitored — "
+                       f"run a search first.",
+        })
+        await websocket.close()
+        return
     queue: asyncio.Queue = asyncio.Queue(maxsize=200)
     await streamer.add_listener(freq_hz, queue, controller)
     try:
@@ -304,7 +328,10 @@ async def websocket_audio(websocket: WebSocket, freq_hz: float):
     except Exception as e:
         logger.debug(f"audio ws error for {freq_hz/1e6:.3f} MHz: {e}")
     finally:
-        await streamer.remove_listener(freq_hz, queue)
+        if await streamer.remove_listener(freq_hz, queue):
+            # Nobody is listening any more, so stop pinning the front end to
+            # this station; the next Listen re-aims it.
+            controller.clear_focus()
 
 
 # ---------------------------------------------------------------------------

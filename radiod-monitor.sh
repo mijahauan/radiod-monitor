@@ -76,13 +76,25 @@ stop() {
     PID=$(cat "$PIDFILE")
     if kill -0 "$PID" 2>/dev/null; then
         echo "Stopping radiod-monitor (PID $PID)..."
-        # Kill child processes (multiprocessing workers) first, then the
-        # main process. Prevents orphan workers running stale code.
+        # SIGTERM the reload worker first, then the reloader parent, so
+        # uvicorn runs the app's lifespan shutdown -- that hook is what
+        # releases this app's radiod channels.
         pkill -P "$PID" 2>/dev/null
         kill "$PID" 2>/dev/null
-        sleep 1
-        pkill -9 -P "$PID" 2>/dev/null
-        kill -0 "$PID" 2>/dev/null && kill -9 "$PID" 2>/dev/null
+        # Then WAIT for it. The shutdown hook polls radiod to enumerate the
+        # channels it owns before dropping them, which takes a second or two.
+        # The old code slept 1 s and then SIGKILLed unconditionally, cutting
+        # that off every single time -- which is why channels accumulated on
+        # radiod across restarts until `control` was full of orphans.
+        for _ in $(seq 1 24); do
+            kill -0 "$PID" 2>/dev/null || break
+            sleep 0.5
+        done
+        if kill -0 "$PID" 2>/dev/null; then
+            echo "Did not exit within 12s; forcing (channels may be orphaned)."
+            pkill -9 -P "$PID" 2>/dev/null
+            kill -9 "$PID" 2>/dev/null
+        fi
         echo "Stopped."
     else
         echo "Process $PID not running."

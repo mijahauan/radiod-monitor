@@ -146,6 +146,12 @@ class AudioStreamer:
             # encoding, so the Opus grant has to be asserted again or the
             # browser starts receiving PCM labelled as Opus.
             _assert_opus(controller.control, channel.ssrc, freq_key)
+            # A restore usually means radiod restarted, which also resets the
+            # front end -- aim it back, but only if this stream is still the
+            # one holding focus. A restoring stream for some other station
+            # must not steal the window from whoever is actually listening.
+            if controller.focused_freq_hz == freq_key:
+                controller.focus_on(freq_key)
 
         dest = getattr(controller, "destination", None)
         preset = getattr(controller, "preset", "nfm")
@@ -176,6 +182,13 @@ class AudioStreamer:
             logger.error(
                 f"Could not prepare Opus channel for {freq_key/1e6:.3f} MHz: {e}"
             )
+
+        # Aim the front end at this station. The window is narrower than a
+        # band segment, so a station outside it produces no RTP at all --
+        # this is what makes an arbitrary station listenable, at the cost of
+        # taking the others out of the window. Done before the receiver
+        # starts so the first packets are already on-frequency.
+        await asyncio.to_thread(controller.focus_on, freq_key)
 
         # Hash-stable parameters must match RadioController exactly so
         # ManagedStream re-attaches to the same deterministic SSRC.
@@ -218,22 +231,62 @@ class AudioStreamer:
         except Exception as e:
             logger.error(f"Failed to start stream for {freq_key/1e6:.3f} MHz: {e}")
 
-    async def remove_listener(self, frequency_hz: float, queue: asyncio.Queue):
+    async def remove_listener(self, frequency_hz: float, queue: asyncio.Queue) -> bool:
+        """Drop one listener. Returns True if that was the last one.
+
+        The radiod channel is deliberately left in place: it belongs to the
+        monitored station set, and the activity monitor still needs it to
+        report SNR. apply_stations() removes it when a search no longer wants
+        it, and close() sweeps whatever is left at shutdown.
+        """
         freq_key = float(frequency_hz)
         listeners = self.listeners.get(freq_key, [])
         if queue in listeners:
             listeners.remove(queue)
-        if not listeners:
-            self.listeners.pop(freq_key, None)
+        if listeners:
+            return False
+        self.listeners.pop(freq_key, None)
+        self.stream_channels.pop(freq_key, None)
+        self._non_opus_warned.discard(freq_key)
+        stream = self.active_streams.pop(freq_key, None)
+        if stream:
+            await asyncio.to_thread(stream.stop)
+            logger.info(
+                f"ManagedStream stopped for {freq_key/1e6:.3f} MHz "
+                f"(no more listeners)"
+            )
+        return True
+
+    async def drop_unmonitored(self, monitored: set) -> int:
+        """Stop streams for frequencies the current search no longer covers.
+
+        Without this a mode switch leaves an orphaned ManagedStream fighting
+        the control plane: apply_stations() removes the channel, ManagedStream
+        sees the stream drop and calls ensure_channel to *re-create* it, and
+        the next search removes it again. The pair never settle, radiod
+        accumulates the re-created channels, and the log fills with restore
+        attempts and "not in the monitored set" warnings from the front-end
+        focus that follows each restore.
+
+        The listener's WebSocket is left to notice on its own -- its queue
+        simply stops filling, and closing it runs the normal teardown.
+        """
+        stale = [f for f in list(self.active_streams)
+                 if not any(abs(f - m) < 1.0 for m in monitored)]
+        for freq_key in stale:
+            stream = self.active_streams.pop(freq_key, None)
             self.stream_channels.pop(freq_key, None)
             self._non_opus_warned.discard(freq_key)
-            stream = self.active_streams.pop(freq_key, None)
             if stream:
-                await asyncio.to_thread(stream.stop)
-                logger.info(
-                    f"ManagedStream stopped for {freq_key/1e6:.3f} MHz "
-                    f"(no more listeners)"
-                )
+                try:
+                    await asyncio.to_thread(stream.stop)
+                except Exception as e:
+                    logger.debug(f"drop_unmonitored: {e}")
+            logger.info(
+                f"Stopped audio for {freq_key/1e6:.3f} MHz — no longer "
+                f"in the monitored set"
+            )
+        return len(stale)
 
     async def stop_all(self):
         """Stop every active stream — used on host switch."""
