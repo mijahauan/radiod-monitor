@@ -237,24 +237,43 @@ Hardware note: `radiod@airspy-generic` (the wideband Airspy R2) crash-loops with
 The HF+ **does** tune VHF: measured clean tuning at 146 MHz and 36 dB SNR at
 162 MHz (NWR audio plays). What it cannot do is cover much at once — a 660.5 kHz
 window — which is why band segments are now cut to the radio rather than fixed.
-Broadcast FM works on this radio. Getting there took fixing two bugs, and the
-earlier guesses in this file (front-end bandwidth, then antenna) were both wrong
-— worth remembering when the next mode produces silence.
+Broadcast FM does **not** work on this receiver, and the reason is radiod's
+wfm demodulator, not this app. Three earlier guesses in this file were wrong
+(front-end bandwidth, then antenna, then "it works") — the history is kept here
+because each was disproved by a measurement worth repeating.
+
+What is fixed and necessary but not sufficient:
 
 1. **ka9q-python sent `DEMOD_TYPE` contradicting the preset.** It derived the
    demodulator from a five-name allowlist and sent it right after `PRESET` in
-   the same packet, so the later value won: `wfm` got `FM_DEMOD`, and radiod
-   ran the *narrowband* FM demod behind the wfm preset's ±110 kHz filter. That
-   emits nothing and reports `snr=-inf` forever. Fixed in ka9q-python 3.25.1
-   (which is why the pin is >= 3.25.1).
+   the same packet, so `wfm` got `FM_DEMOD` and radiod ran the *narrowband* FM
+   demod behind a ±110 kHz filter — no output, `snr=-inf`, no error. Fixed in
+   ka9q-python 3.25.1; the channel now correctly reports `demod_type=2`.
 
 2. **`Source.snr_squelch = False` cannot be honoured as written.** `wfm.c` sets
-   `chan->squelch.snr_enable = true` unconditionally when the demod thread
-   starts, so `set_squelch(enable=False)` is reverted. `_squelch_args()` holds
-   the squelch open with a −20 dB threshold instead.
+   `chan->squelch.snr_enable = true` unconditionally at demod start, reverting
+   `enable=False`, so `_squelch_args()` holds the squelch open with a −20 dB
+   threshold instead. On the RX888 this took a wfm channel from 0 packets to
+   301 in 6 s.
 
-The window was never the problem: radiod places the channel at IF +219.2 kHz,
-exactly `max_IF - filter.max_IF - fudge`, so the whole ±110 kHz filter lands
-inside the 660.5 kHz window, and the 384 kHz composite path fits the 768 kHz
-input. Verified end-to-end: FM stations stream ~9 s of continuous audio at
-rms 0.06 through the browser path.
+What still blocks it: **radiod's wfm demod emits nothing at all on a 768 kHz
+front end.** Verified with radiod's own `pcmrecord` (not just this app), with
+S16BE (not just Opus), at the strongest FM signal available — 91.3 MHz, whose
+baseband power (−69.5 dBFS) exceeds the NWR station that plays perfectly
+(−81.7 dBFS). The same demod streams continuously on bee1's RX888.
+
+The likely mechanism, consistent with both observations: radiod parks a wfm
+channel 219.2 kHz from the LO (`max_IF - filter.max_IF - fudge`) in a ±330 kHz
+window, but `wfm.c` runs a 384 kHz composite path — ±192 kHz around the
+channel — so the composite extends to 411 kHz, past the window edge. Nothing
+moves that placement: `set_first_lo` is ignored (`airspyhf_tune` honours
+`frontend->lock`, and `set_freq` re-places on every call), approaching the
+frequency from either side lands on the same edge, and overriding the channel's
+`low_edge`/`high_edge` does not change it either.
+
+**Verifying FM audio requires listening to the content, not counting frames.**
+A wide-open squelch streams noise at full rate, which satisfies any check based
+on packet count or RMS — that is exactly how "FM works" got claimed here in
+error. Compare spectral shape and envelope variation against a known-good
+station: NWR reads voice/hiss 13.8 and envelope variation 0.49; the FM captures
+read 0.03, i.e. steady hiss.
