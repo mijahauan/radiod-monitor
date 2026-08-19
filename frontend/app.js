@@ -39,6 +39,7 @@ let stationsData = [];
 let wsControl;
 let currentMode = '';
 let currentAudioChannels = 1;   // set from each results message
+let currentActivityAvailable = true;
 let sourcesSchema = {};     // key -> {display_name, controls, preset, audio_channels}
 
 // Marker icons
@@ -173,7 +174,7 @@ async function loadSources() {
 /**
  * Build per-source UI controls inside #modeControls based on the schema
  * returned by /api/sources. Currently supports:
- *   - bandSegments: [{value, label, center_mhz}]  → dropdown
+ *   - bandSegments: [{value, label}]  → dropdown
  */
 function renderModeControls() {
     modeControls.innerHTML = '';
@@ -186,7 +187,7 @@ function renderModeControls() {
         wrap.className = 'control-group';
         const label = document.createElement('label');
         label.setAttribute('for', 'bandSelect');
-        label.textContent = 'Band Segment';
+        label.textContent = 'Band';
         const sel = document.createElement('select');
         sel.id = 'bandSelect';
         for (const bs of c.bandSegments) {
@@ -270,6 +271,11 @@ function handleSearchResults(data) {
     // listenToStation can configure the WebCodecs AudioDecoder correctly.
     // wfm is stereo (2 channels), everything else is mono.
     currentAudioChannels = data.audio_channels || 1;
+    // False when the station set is wider than the receiver's window: no
+    // channels exist, so no marker will ever go green. There is no activity
+    // legend in this UI to hide, so the flag's only consumer is the frequency
+    // strip caption (Task 5), which explains the situation in one line.
+    currentActivityAvailable = data.activity !== false;
 
     if (data.lat !== undefined && data.lon !== undefined) {
         map.setView([data.lat, data.lon], 9);
@@ -284,6 +290,10 @@ function handleSearchResults(data) {
     for (const st of stationsData) {
         const marker = L.marker([st.lat, st.lon], { icon: defaultIcon }).addTo(map);
         marker.bindPopup(buildPopup(st));
+        marker.bindTooltip(
+            `${st.name} ${(st.freq_hz / 1e6).toFixed(1)}`,
+            { permanent: true, direction: 'right', className: 'station-label' }
+        );
         markers[st.freq_hz] = marker;
 
         const li = document.createElement('li');
