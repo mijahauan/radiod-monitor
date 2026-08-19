@@ -67,10 +67,11 @@ class RadioController:
         # set the audio plane validates against -- not active_channels, which
         # fills in gradually while channels are still being created.
         self.monitored_freqs: set = set()
-        # Usable IF window of the connected receiver, in Hz, as radiod
-        # reports it. Sources size their band segments to this. None until
-        # probed; re-probed on every host change because the answer is a
-        # property of the radio, not of this app.
+        # Measured usable IF window of the connected receiver, in Hz --
+        # probed from radiod's FE_LOW_EDGE/FE_HIGH_EDGE on connect. The
+        # controller needs this to know what the radio can actually cover.
+        # None until probed; re-probed on every host change because the
+        # answer is a property of the radio, not of this app.
         self.usable_bw_hz: Optional[float] = None
         self.fe_low_edge_hz: Optional[float] = None
         self.fe_high_edge_hz: Optional[float] = None
