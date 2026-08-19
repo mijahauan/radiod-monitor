@@ -93,9 +93,11 @@ class RadioController:
         # SSRC of the anchor channel that positions the front end (see
         # focus_on). One at most, moved rather than re-created.
         self._anchor_ssrc: Optional[int] = None
-        # Toggled on every anchor placement so consecutive anchors for the
-        # SAME station don't hash to the same SSRC -- see _ANCHOR_NUDGE_HZ.
-        self._anchor_nudge_on: bool = False
+        # Frequency (post-nudge, if any) of the anchor currently held in
+        # _anchor_ssrc -- i.e. the one _set_focus would drop next. Compared
+        # against the next candidate anchor frequency to decide whether the
+        # 1 kHz nudge is needed; see _ANCHOR_NUDGE_HZ.
+        self._last_anchor_hz: Optional[float] = None
         self._apply_lock = threading.Lock()
 
     async def connect(self):
@@ -342,12 +344,24 @@ class RadioController:
     # station recomputes the identical anchor_hz, hence the identical
     # deterministic SSRC, and ensure_channel then "reuses" a channel radiod
     # is still reaping instead of creating a live one (the same class of race
-    # CLAUDE.md documents for the station convergence diff). Toggling a 1 kHz
-    # nudge on/off between successive placements changes the SSRC without
-    # changing where the window lands: 1 kHz is far inside the anchor's own
-    # ±5 kHz "am" filter, so it is inaudible and irrelevant to placement --
-    # it exists purely to dodge the SSRC collision.
+    # CLAUDE.md documents for the station convergence diff). A 1 kHz nudge
+    # changes the SSRC without changing where the window lands: 1 kHz is far
+    # inside the anchor's own ±5 kHz "am" filter, so it is inaudible and
+    # irrelevant to placement -- it exists purely to dodge the SSRC
+    # collision. It is applied ONLY when the new anchor's candidate
+    # frequency matches the one about to be dropped (see _last_anchor_hz);
+    # a genuinely different anchor frequency already hashes to a different
+    # SSRC, so nudging it too would just move the LO placement for nothing.
     _ANCHOR_NUDGE_HZ = 1_000.0
+
+    # How far a station's frequency may sit from the measured window centre
+    # before _set_focus() considers the front end "already centred" and
+    # skips placing a new anchor. The wfm composite path needs ±192 kHz of
+    # headroom inside a ±330 kHz window here, so up to ~138 kHz of off-centre
+    # is harmless to audio; 50 kHz is comfortably inside that margin while
+    # still tight enough to catch a window that has genuinely drifted (e.g.
+    # after apply_stations dragged it away -- see _reassert_focus).
+    CENTRED_TOLERANCE_HZ = 50_000.0
 
     def _set_focus(self, freq_hz: float) -> bool:
         """Centre the front-end window on `freq_hz` using an anchor channel.
@@ -383,6 +397,31 @@ class RadioController:
         """
         if not self.control:
             return False
+
+        # Idempotency check: a station producing no audio has its
+        # ManagedStream restore every 5 s, which calls focus_on -> here,
+        # every time. If an anchor already exists, is already aimed at this
+        # frequency, and the window it produced is still centred on this
+        # frequency, the work is already done -- creating another anchor
+        # would only add churn (a fresh SSRC via the nudge, and a zombie
+        # left behind by the one just dropped) for a front end that hasn't
+        # moved. Only skip when we can actually measure the window; if
+        # read_window() can't tell us, fall through and place the anchor as
+        # before rather than guessing.
+        if self._anchor_ssrc is not None and self.focused_freq_hz is not None \
+                and abs(self.focused_freq_hz - freq_hz) < 1.0:
+            window = self.read_window()
+            if window is not None:
+                win_low, win_high = window
+                offset = freq_hz - (win_low + win_high) / 2.0
+                if abs(offset) <= self.CENTRED_TOLERANCE_HZ:
+                    logger.debug(
+                        f"focus_on: {freq_hz/1e6:.3f} MHz already centred "
+                        f"(offset {offset/1e3:+.1f} kHz from window centre); "
+                        f"anchor unchanged"
+                    )
+                    return True
+
         # Gate on monitored_freqs, not active_channels: in directory mode
         # active_channels is empty by design (see fits_window), but the
         # station the listener picked is still in monitored_freqs, and this
@@ -447,11 +486,12 @@ class RadioController:
                 )
                 return True
 
-        # See _ANCHOR_NUDGE_HZ: alternate the anchor frequency by a small
-        # amount so back-to-back anchors for the same station don't collide
-        # with a still-being-reaped SSRC.
-        self._anchor_nudge_on = not self._anchor_nudge_on
-        if self._anchor_nudge_on:
+        # See _ANCHOR_NUDGE_HZ: nudge only when this candidate would land on
+        # the same frequency as the anchor we're about to drop -- that's the
+        # only case where an SSRC collision with a still-being-reaped
+        # channel is possible.
+        if self._last_anchor_hz is not None \
+                and abs(anchor_hz - self._last_anchor_hz) < 1.0:
             anchor_hz += self._ANCHOR_NUDGE_HZ
 
         try:
@@ -477,6 +517,7 @@ class RadioController:
             pass
         self._drop_anchor(keep=anchor.ssrc)
         self._anchor_ssrc = anchor.ssrc
+        self._last_anchor_hz = anchor_hz
         logger.info(
             f"Front end centred on {freq_hz/1e6:.3f} MHz via anchor at "
             f"{anchor_hz/1e6:.3f} MHz (SSRC {anchor.ssrc:08x})"
