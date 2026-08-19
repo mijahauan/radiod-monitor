@@ -176,10 +176,26 @@ class RadioController:
         own terms, and the anchor mechanism in focus_on() exists precisely
         because the obvious model of its placement was wrong.
 
-        Picks an SSRC to poll: the anchor channel if one is focused (present
-        whenever a listener holds focus, which is precisely when the window
-        matters -- and the only channel that exists at all in directory
-        mode), otherwise any active channel.
+        Picks an SSRC to poll: the anchor channel if one is focused, else any
+        active channel, else -- if a station is focused -- the deterministic
+        SSRC for its own channel.
+
+        That third case matters specifically for the FIRST focus_on() call
+        for a newly selected station in directory mode: at that point no
+        anchor has been created yet (this call is what decides where to put
+        one) and active_channels is empty by design (see fits_window), so
+        without this fallback read_window() returns None and _set_focus()
+        falls back to the unconditional high-side anchor -- a coin flip on
+        which side is actually outside the current window. Guessing wrong
+        parks the station at the window edge with no audio until the 5 s
+        ManagedStream restore triggers a second focus_on(), by which time an
+        anchor exists and the side is chosen correctly -- i.e. wrong guesses
+        here cost the user real silence, not just a cosmetic retry. The
+        station's own channel is guaranteed to exist by this point:
+        AudioStreamer.add_listener calls ensure_channel for it before calling
+        focus_on. Its SSRC is computed the same way _assert_frequency
+        computes it, rather than looked up, because active_channels may not
+        have folded it in yet either (see _assert_frequency's docstring).
         """
         if not self.control:
             return None
@@ -187,6 +203,17 @@ class RadioController:
             ssrc = self._anchor_ssrc
         elif self.active_channels:
             ssrc = next(iter(self.active_channels))
+        elif self.focused_freq_hz is not None:
+            ssrc = allocate_ssrc(
+                frequency_hz=self.focused_freq_hz,
+                preset=self.preset,
+                sample_rate=self.sample_rate,
+                agc=False,
+                gain=0.0,
+                destination=self.destination,
+                encoding=Encoding.OPUS,
+                radiod_host=self.control.status_address,
+            )
         else:
             return None
         if self.fe_low_edge_hz is None or self.fe_high_edge_hz is None:
