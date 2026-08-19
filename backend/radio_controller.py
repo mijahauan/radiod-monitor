@@ -338,12 +338,59 @@ class RadioController:
             )
             return False
         high_edge = self.fe_high_edge_hz
+        low_edge = self.fe_low_edge_hz
         if high_edge is None:
             # Without the front-end edges we cannot compute the anchor
             # position. Fall back to re-asserting the station itself, which at
             # least brings it inside the window for narrowband modes.
             return self._assert_frequency(freq_hz)
-        anchor_hz = freq_hz + (high_edge - self._ANCHOR_MARGIN_HZ)
+
+        # radiod retunes only for a channel whose filter falls OUTSIDE the
+        # current window; a channel that is already inside it is a no-op by
+        # design (radio.c: "as little as possible"). So an anchor placed on a
+        # fixed side is only a coincidence away from landing inside the
+        # window it was meant to move -- which is exactly the bug measured at
+        # 102.300 MHz: the high-side anchor landed at IF +105.0 kHz, inside
+        # the window, so radiod left the station parked at the edge with no
+        # audio. Which side is actually outside the window depends on where
+        # the LO happens to sit when focus is requested, so read the current
+        # window and choose accordingly.
+        high_candidate = freq_hz + (high_edge - self._ANCHOR_MARGIN_HZ)
+        low_candidate = (
+            freq_hz + (low_edge + self._ANCHOR_MARGIN_HZ)
+            if low_edge is not None else None
+        )
+
+        window = self.read_window()
+        if window is None:
+            # Can't tell where the LO currently sits -- keep the previous,
+            # unconditional high-side behaviour as the fallback.
+            anchor_hz = high_candidate
+        else:
+            win_low, win_high = window
+            high_outside = not (win_low <= high_candidate <= win_high)
+            low_outside = (
+                low_candidate is not None
+                and not (win_low <= low_candidate <= win_high)
+            )
+            if high_outside:
+                # Prefer the high side when it works: this is the common
+                # case and keeps behaviour unchanged from before this fix.
+                anchor_hz = high_candidate
+            elif low_outside:
+                anchor_hz = low_candidate
+            else:
+                # Neither candidate lies outside the current window -- e.g. a
+                # very wide window relative to the anchor offsets, such as a
+                # direct-sampling RX888. No anchor can move the window, but
+                # none is needed either: the station is already comfortably
+                # inside it.
+                logger.debug(
+                    f"focus_on: {freq_hz/1e6:.3f} MHz already centred enough "
+                    f"(window {win_low/1e6:.3f}..{win_high/1e6:.3f} MHz); "
+                    f"no anchor needed"
+                )
+                return True
         try:
             anchor = self.control.ensure_channel(
                 frequency_hz=anchor_hz,
