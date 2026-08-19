@@ -183,11 +183,12 @@ class AudioStreamer:
                 f"Could not prepare Opus channel for {freq_key/1e6:.3f} MHz: {e}"
             )
 
-        # Aim the front end at this station. The window is narrower than a
-        # band segment, so a station outside it produces no RTP at all --
-        # this is what makes an arbitrary station listenable, at the cost of
-        # taking the others out of the window. Done before the receiver
-        # starts so the first packets are already on-frequency.
+        # Aim the front end at this station. The window is narrower than the
+        # spectrum a searched station set can span, so a station outside it
+        # produces no RTP at all -- this is what makes an arbitrary station
+        # listenable, at the cost of taking the others out of the window.
+        # Done before the receiver starts so the first packets are already
+        # on-frequency.
         await asyncio.to_thread(controller.focus_on, freq_key)
 
         # Hash-stable parameters must match RadioController exactly so
@@ -231,13 +232,22 @@ class AudioStreamer:
         except Exception as e:
             logger.error(f"Failed to start stream for {freq_key/1e6:.3f} MHz: {e}")
 
-    async def remove_listener(self, frequency_hz: float, queue: asyncio.Queue) -> bool:
+    async def remove_listener(self, frequency_hz: float, queue: asyncio.Queue,
+                               controller) -> bool:
         """Drop one listener. Returns True if that was the last one.
 
-        The radiod channel is deliberately left in place: it belongs to the
-        monitored station set, and the activity monitor still needs it to
-        report SNR. apply_stations() removes it when a search no longer wants
-        it, and close() sweeps whatever is left at shutdown.
+        Whether the radiod channel is left in place depends on who owns it.
+        In fit mode the frequency is in controller.active_channels: it
+        belongs to the monitored station set, apply_stations() will remove it
+        when a search no longer wants it, and the activity monitor still
+        needs it to report SNR -- so it stays. In directory mode nothing owns
+        an on-demand channel once its last listener leaves: apply_stations()
+        never created it, and (per the directory-mode fix that keeps only the
+        *focused* frequency) won't clean it up either once focus moves on.
+        Leaving it here would orphan one channel per station a user has
+        listened to -- for wfm those are squelched wide open (-20 dB), so
+        each keeps emitting Opus RTP to the multicast group with nobody
+        listening. Remove it ourselves in that case.
         """
         freq_key = float(frequency_hz)
         listeners = self.listeners.get(freq_key, [])
@@ -255,6 +265,24 @@ class AudioStreamer:
                 f"ManagedStream stopped for {freq_key/1e6:.3f} MHz "
                 f"(no more listeners)"
             )
+            owned = controller is not None and any(
+                abs(f - freq_key) < 1.0
+                for f in controller.active_channels.values()
+            )
+            if not owned and controller is not None and controller.control:
+                try:
+                    await asyncio.to_thread(
+                        controller.control.remove_channel, stream.channel.ssrc
+                    )
+                    logger.info(
+                        f"Removed on-demand channel for {freq_key/1e6:.3f} MHz "
+                        f"(not in the monitored station set)"
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to remove on-demand channel for "
+                        f"{freq_key/1e6:.3f} MHz: {e}"
+                    )
         return True
 
     async def drop_unmonitored(self, monitored: set) -> int:

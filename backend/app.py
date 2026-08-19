@@ -302,6 +302,17 @@ async def _handle_search(websocket: WebSocket, data: Dict[str, Any]):
         # ManagedStream would otherwise keep re-creating it against the next
         # search's removals — see AudioStreamer.drop_unmonitored.
         await streamer.drop_unmonitored(controller.monitored_freqs)
+        # If the mode switch also dropped the focused frequency, clear focus:
+        # the anchor channel is exempt from the stale-channel sweep in
+        # _apply_stations_locked (that is what keeps it from being deleted
+        # out from under a listener), so without this it would sit there
+        # holding the front end on a station nobody can reach any more,
+        # surviving every later search until shutdown.
+        focused = controller.focused_freq_hz
+        if focused is not None and not any(
+            abs(f - focused) < 1.0 for f in controller.monitored_freqs
+        ):
+            controller.clear_focus()
 
     asyncio.create_task(_converge())
 
@@ -354,7 +365,7 @@ async def websocket_audio(websocket: WebSocket, freq_hz: float):
     except Exception as e:
         logger.debug(f"audio ws error for {freq_hz/1e6:.3f} MHz: {e}")
     finally:
-        if await streamer.remove_listener(freq_hz, queue):
+        if await streamer.remove_listener(freq_hz, queue, controller):
             # Nobody is listening any more, so stop pinning the front end to
             # this station; the next Listen re-aims it.
             controller.clear_focus()

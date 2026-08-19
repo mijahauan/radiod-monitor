@@ -143,8 +143,8 @@ class RadioController:
                 )
             else:
                 logger.warning(
-                    "radiod did not report FE_LOW_EDGE/FE_HIGH_EDGE; band "
-                    "segments will fall back to a default width"
+                    "radiod did not report FE_LOW_EDGE/FE_HIGH_EDGE; "
+                    "fits_window() will fall back to a default window width"
                 )
         except Exception as e:
             logger.warning(f"Could not probe the front end: {e}")
@@ -186,7 +186,7 @@ class RadioController:
             return None
         fe = getattr(status, "frontend", None) or status
         first_lo = getattr(fe, "first_lo", None)
-        if not first_lo:
+        if first_lo is None:
             return None
         return (first_lo + self.fe_low_edge_hz, first_lo + self.fe_high_edge_hz)
 
@@ -262,9 +262,10 @@ class RadioController:
     def focus_on(self, freq_hz: float) -> bool:
         """Pull the front end onto `freq_hz` by re-asserting that channel.
 
-        The front end covers one window at a time -- 768 kHz on the airspyhf
-        here -- while a source's band segment can be far wider (FmSource uses
-        5 MHz). Only stations inside the current window produce any RTP at
+        The front end covers one window at a time -- 660 kHz on the airspyhf
+        here -- while a source's searched station set can span far more
+        spectrum than that (a repeater or FM search can span multiple MHz).
+        Only stations inside the current window produce any RTP at
         all; the rest sit at snr=-inf. Since radiod re-places the front end
         to cover a channel whose frequency is asserted, asserting the one the
         user chose is what makes it listenable.
@@ -372,13 +373,38 @@ class RadioController:
         return True
 
     def _assert_frequency(self, freq_hz: float) -> bool:
-        """Last-resort focus: re-assert the station's own frequency."""
+        """Last-resort focus: re-assert the station's own frequency.
+
+        Resolves the SSRC from active_channels when it is populated -- but in
+        directory mode with the front-end edges unprobed (high_edge is None,
+        which is why _set_focus fell back here) active_channels can still be
+        empty: this is called from add_listener's very first focus_on, before
+        any apply_stations() diff has had a chance to fold the on-demand
+        channel back in (see the directory-mode fix in
+        _apply_stations_locked). Falls back to recomputing the deterministic
+        SSRC the same way apply_stations does, gated on monitored_freqs in
+        the same spirit as _set_focus so this doesn't invent a channel for a
+        frequency nobody searched for.
+        """
         ssrc = next(
             (s for s, f in self.active_channels.items() if abs(f - freq_hz) < 1.0),
             None,
         )
         if ssrc is None:
-            return False
+            if not any(abs(f - freq_hz) < 1.0 for f in self.monitored_freqs):
+                return False
+            if not self.control:
+                return False
+            ssrc = allocate_ssrc(
+                frequency_hz=freq_hz,
+                preset=self.preset,
+                sample_rate=self.sample_rate,
+                agc=False,
+                gain=0.0,
+                destination=self.destination,
+                encoding=Encoding.OPUS,
+                radiod_host=self.control.status_address,
+            )
         try:
             self.control.set_frequency(ssrc, freq_hz)
             return True
@@ -430,7 +456,8 @@ class RadioController:
         with different hash inputs or encoding. Re-entrant: updates
         channels no longer in it. Mutates self.active_channels.
 
-        Serialized with a lock so rapid band-segment switches don't race.
+        Serialized with a lock so rapid searches (squelch/radius/mode
+        changes) don't race.
         """
         if not self.control:
             logger.warning("apply_stations: no radiod connection")
@@ -470,11 +497,32 @@ class RadioController:
         # create the one channel a listener actually asks for.
         self.activity_available = self.fits_window(new_freqs)
         if not self.activity_available:
+            # Directory mode: no channels are created for the searched set
+            # up front. But if a listener is currently focused on a station,
+            # keep just that one frequency in new_freqs rather than clearing
+            # it entirely -- otherwise this sweep deletes the on-demand
+            # channel AudioStreamer.add_listener created for whoever is
+            # actively listening (it isn't an anchor, so it isn't exempt),
+            # ManagedStream re-creates it after its 5 s drop_timeout_sec, and
+            # the very next search deletes it again. That is exactly the
+            # "search cuts off audio the user is listening to" regression
+            # this project fixed once already, reintroduced by directory
+            # mode. Keeping the focused frequency here also lets it flow
+            # through the normal reuse/create path below, so it lands in
+            # self.active_channels like any other monitored station -- which
+            # is what makes set_squelch() reach it too.
+            station_count = len(new_freqs)
+            new_freqs = {
+                f for f in new_freqs
+                if self.focused_freq_hz is not None
+                and abs(f - self.focused_freq_hz) < 1.0
+            }
             logger.info(
-                f"{len(new_freqs)} stations span more than the receiver's "
-                f"window — directory mode, channels created on demand"
+                f"{station_count} stations span more than the receiver's "
+                f"window — directory mode, {len(new_freqs)} station(s) "
+                f"monitored (the focused one, if any), other channels "
+                f"created on demand"
             )
-            new_freqs = set()
 
         logger.info(
             f"Monitoring {len(new_freqs)} frequencies  preset={preset}  "

@@ -263,6 +263,13 @@ function clearStations() {
     markers = {};
     repeaterList.innerHTML = '';
     repeaterCount.textContent = '0';
+    // A mode switch that leaves no channels and no anchor (e.g. NWS -> FM in
+    // directory mode) produces no further "window" broadcasts at all, so a
+    // stale window caption/box would otherwise persist indefinitely and
+    // suppress the "wider than the receiver" caption. Reset it here so the
+    // strip reflects "no measurement yet" until a new one arrives.
+    currentWindow = null;
+    drawFreqStrip();
 }
 
 // ---------------------------------------------------------------------------
