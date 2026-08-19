@@ -153,3 +153,47 @@ Two things I changed in this area while chasing it:
   change still stands on its own merits — the wire-level check in `_broadcast`
   (reject any payload too large to be an Opus frame) inspects the actual bytes,
   so it is strictly stronger than re-reading the control plane, and free.
+
+## Next session: use the RTP payload type, not a size heuristic
+
+`AudioStreamer._broadcast()` currently detects "radiod is serving PCM on a
+channel we asked to be Opus" by rejecting payloads over 1275 bytes (the RFC
+6716 single-frame maximum). That works only because PCM frames happen to be
+large. radiod states the answer outright: the **RTP payload type** identifies
+the encoding, and radiod allocates it from `pt_from_info(samprate, channels,
+encoding)` (`radio_status.c`). Observed here: **111 = Opus, 112 = PCM** — both
+already visible in packet captures taken this session.
+
+ka9q-radio's `monitor` is built on this. It keys every decision off
+`sp->pt_table[pkt->rtp.type]`, a payload-type → (encoding, samprate, channels)
+table filled in from radiod's status messages (`monitor.c:528-530`), and reads
+the encoding per packet in `monitor-data.c`. That detects a lost Opus grant on
+the *first* packet, definitively, and carries the channel count too.
+
+**The wrinkle: the payload type is not currently reachable from this app.**
+`raw_payloads=True` delivers `List[bytes]` of RTP *payloads*; `_process_packet`
+parses the header and then discards it, so `on_samples` never sees the type.
+So this is a two-repo change:
+
+1. ka9q-python — expose it. Least invasive: carry the observed payload type on
+   `StreamQuality` (it is already passed to every `on_samples` call, and with
+   `deliver_interval_packets=1` there is exactly one packet per batch, so a
+   scalar is honest). Bump the minor version; radiod-monitor's pin moves with it.
+2. radiod-monitor — replace the size check in `_broadcast()` with a payload-type
+   check, and keep the size check only as a cheap secondary guard.
+
+Worth doing at the same time, both from reading `monitor`:
+
+- **Reset the browser decoder on stream restore.** monitor calls
+  `OPUS_RESET_STATE` when a stream restarts and refuses to decode a packet whose
+  RTP timestamp is not the expected next one, blanking it instead --
+  "the decoder state won't be right". Our frontend keeps feeding the same
+  `AudioDecoder` across a `ManagedStream` restore, which is exactly that case.
+- **Validate before decoding.** monitor treats `OPUS_INVALID_PACKET` from
+  `opus_packet_get_nb_samples()` as a drop; we forward whatever arrives.
+
+Not a candidate for change: monitor creates its decoder at the *local* channel
+count and lets libopus convert, tagging the packet's real channel count as
+"only for display purposes". WebCodecs is stricter -- a wrong
+`numberOfChannels` throws on the first packet -- so the TOC-byte sniffing in
+`opus_channels()` stays.
