@@ -197,3 +197,47 @@ count and lets libopus convert, tagging the packet's real channel count as
 "only for display purposes". WebCodecs is stricter -- a wrong
 `numberOfChannels` throws on the first packet -- so the TOC-byte sniffing in
 `opus_channels()` stays.
+
+## Why wfm produces nothing: radiod reserves the wrong margin (2026-08-19)
+
+Root cause, now measured on **both** receivers, so it is not front-end width:
+
+`radio.c:set_freq()` places a channel so its *filter* clears the front-end
+window edge — it retunes only when `new_if > Frontend.max_IF -
+chan->filter.max_IF`, then parks it exactly there minus a 1 kHz fudge. For the
+wfm preset `filter.max_IF` is 110 kHz, so the channel lands **111 kHz from the
+edge**.
+
+But `wfm.c` does not demodulate in that filter. It builds a **384 kHz composite
+path** (`Composite_samprate = 8 * FULL_SAMPRATE`) and needs **±192 kHz** around
+the channel. 192 > 111, so the composite overruns the window edge and the demod
+yields nothing: `snr=-inf`, zero RTP, no error logged.
+
+Measured on the Airspy R2 (window −4700..−600 kHz, 4.1 MHz wide):
+
+    IF = -4589.0 kHz   edge-margin = 111.0 kHz   snr = -inf   frames = 0
+
+Identical 111 kHz margin on the Airspy HF+ (±330 kHz window, IF ±219.2 kHz).
+Same number, same symptom, six times the front-end width — the margin is set by
+the *filter*, not by the radio.
+
+No client-side workaround was found. All of these leave the placement at
+111 kHz margin:
+  - `set_first_lo()` — ignored (`airspyhf_tune` honours `frontend->lock`, and
+    `set_freq` re-places on every call anyway)
+  - approaching the frequency from above or below — same edge either way
+  - `ensure_channel(low_edge=…, high_edge=…)` at ±200k/±250k — `wfm.c` re-runs
+    `set_freq()` at demod start from the *preset's* filter values
+
+It works only when the LO happens to land elsewhere — one run produced 802
+frames at `snr=9.97` with envelope variation 0.56 (above the NWS known-good
+reference of 0.49, i.e. genuinely modulated audio), which is what proves the
+demod itself is fine.
+
+**This is upstream.** The fix belongs in `set_freq()`: reserve the
+demodulator's actual required bandwidth (for WFM, `Composite_samprate/2`) rather
+than `chan->filter.max_IF`. Worth reporting to KA9Q with the numbers above.
+
+Everything else on the FM path is correct and verified: demod type (fixed in
+ka9q-python 3.25.1), the Opus grant, the squelch workaround, band segmentation,
+and the browser decoder.
