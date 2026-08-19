@@ -59,9 +59,6 @@ class RadioController:
         # wfm does not publish SNR so SNR-squelched channels never open.
         # Set by apply_stations() from the active Source.
         self.snr_squelch_enabled: bool = True
-        # Nominal band centre from the active Source. Advisory: radiod, not
-        # this app, decides where the front end sits (see tune_center).
-        self.band_center_hz: Optional[float] = None
         # Frequency the front end is currently aimed at, if any listener has
         # asked for one. Sticky: re-asserted after anything that disturbs
         # radiod's front-end placement (see focus_on / _reassert_focus).
@@ -195,24 +192,6 @@ class RadioController:
                 self.control.set_squelch(ssrc, **kwargs)
             except Exception as e:
                 logger.warning(f"Failed to update squelch on SSRC {ssrc:08x}: {e}")
-
-    def tune_center(self, center_freq_hz: float):
-        """Record the source's nominal band centre. Advisory only.
-
-        This used to issue set_first_lo(). It does not any more, because
-        radiod ignores it: radiod owns front-end placement and derives it
-        from the frequencies of the channels you ask for, re-deriving it
-        whenever a channel's frequency is asserted. Measured on this radiod,
-        requesting a channel at 102.300 MHz put first_lo at 101.976 MHz --
-        identically with no LO command, with set_first_lo(102.300), and with
-        set_first_lo(100.500). The old call was a no-op that logged a
-        "Tuned front-end LO to ..." line describing something that never
-        happened.
-
-        Front-end placement is now done where it can actually be honoured:
-        focus_on(), called when a listener attaches to a station.
-        """
-        self.band_center_hz = center_freq_hz
 
     def focus_on(self, freq_hz: float) -> bool:
         """Pull the front end onto `freq_hz` by re-asserting that channel.
@@ -561,12 +540,11 @@ class RadioController:
             except Exception as e:
                 logger.error(f"Failed to ensure channel for {freq_hz/1e6:.3f} MHz: {e}")
 
-        # No front-end tuning to a band centre here: radiod places the front
-        # end from the channels it was asked for and can only cover one window
-        # at a time, so no placement satisfies a whole band segment. See
-        # tune_center() for why the old set_first_lo() call was a no-op.
+        # No front-end tuning to a band centre: radiod places the front end
+        # from the channels it was asked for and can only cover one window
+        # at a time. focus_on() aims it at the station a listener chose.
         #
-        # But every channel created above just moved the front end, so if a
+        # Every channel created above just moved the front end, so if a
         # listener is holding a station, aim it back at them.
         self._reassert_focus()
 

@@ -2,8 +2,8 @@
 NOAA Weather Radio source.
 
 The 7 standard NWR frequencies fit inside a single 150 kHz window centered
-on 162.475 MHz, so `center_freq_hz` always returns that value regardless of
-params. Station list is loaded from data/nws_stations.json, filtered by
+on 162.475 MHz, so there is nothing to segment (see controls_schema).
+Station list is loaded from data/nws_stations.json, filtered by
 great-circle distance from the user's location.
 """
 import json
@@ -26,9 +26,6 @@ NWS_FREQUENCIES_HZ = [
     162_400_000, 162_425_000, 162_450_000, 162_475_000,
     162_500_000, 162_525_000, 162_550_000,
 ]
-
-# Band center: midpoint of the NWS plan.
-NWS_CENTER_HZ = 162_475_000
 
 
 def _channel_label(freq_hz: int) -> str:
@@ -63,14 +60,11 @@ class NwsSource(Source):
             self._cache = []
         return self._cache
 
-    def controls_schema(self, usable_bw_hz=None) -> Dict[str, Any]:
+    def controls_schema(self) -> Dict[str, Any]:
         # No per-source controls. The seven NWR channels span 162.400 to
         # 162.550 MHz -- 150 kHz -- which fits inside the window of every
         # receiver this app supports, so there is nothing to segment.
         return {}
-
-    def center_freq_hz(self, params: Dict[str, Any]) -> float:
-        return float(NWS_CENTER_HZ)
 
     def list_stations(
         self,

@@ -2,10 +2,9 @@
 VHF/UHF amateur repeater source.
 
 Loads a RepeaterBook KML export from data/repeaters*.kml, filters by
-great-circle distance from the user and by a user-selected 5 MHz band
-segment (the Airspy R2 covers ~5 MHz at a time; most SDRs have similar
-limits relative to the ham bands). The center frequency tuned on radiod
-is the midpoint of the selected band segment.
+great-circle distance from the user and by a user-selected real amateur
+band (2m, 1.25m, 70cm). Which stations in that band the connected receiver
+can hear at once is RadioController's problem, not this source's.
 """
 import glob
 import logging
@@ -16,7 +15,7 @@ import xml.etree.ElementTree as ET
 from typing import Any, Dict, List, Tuple
 
 from ..geo import haversine_km
-from .base import Source, Station, segment_band
+from .base import Source, Station
 
 logger = logging.getLogger(__name__)
 
@@ -24,38 +23,22 @@ _DATA_DIR = os.path.normpath(
     os.path.join(os.path.dirname(__file__), "..", "..", "data")
 )
 
-# Tuple form: (low_mhz, high_mhz)
-# The amateur bands this source covers, as (key_prefix, low_mhz, high_mhz,
-# label_prefix). Each is cut into segments that fit the connected
-# receiver's usable window -- 2m alone is 4 MHz, which no narrowband front
-# end can cover at once (an Airspy HF+ manages 660 kHz), so a fixed split
-# would leave most repeaters visible but unlistenable.
-_BANDS = [
-    ("2m", 144.0, 148.0, "2m "),
-    ("1.25m", 222.0, 225.0, "1.25m "),
-    ("70cm", 420.0, 450.0, "70cm "),
-]
+# Real amateur bands the user has an opinion about. Not subdivided: a band
+# too wide for the connected receiver becomes a directory (see
+# RadioController.fits_window), which is not something the user should have
+# to think about.
+_BANDS: Dict[str, Tuple[float, float, str]] = {
+    "2m":    (144.0, 148.0, "2m (144 – 148 MHz)"),
+    "1.25m": (222.0, 225.0, "1.25m (222 – 225 MHz)"),
+    "70cm":  (420.0, 450.0, "70cm (420 – 450 MHz)"),
+}
+_DEFAULT_BAND = "2m"
 
 
-def _segments(usable_bw_hz):
-    out = []
-    for prefix, low, high, label in _BANDS:
-        out.extend(segment_band(low, high, usable_bw_hz, prefix, label))
-    return out
-
-
-def _segment_for(band, usable_bw_hz):
-    """Resolve a band key to (low_mhz, high_mhz), tolerating a stale key.
-
-    Segment keys depend on the receiver's window, so one the browser saved
-    (or picked before a host switch) may no longer exist. Fall back to the
-    first 2m segment rather than failing the search.
-    """
-    segs = _segments(usable_bw_hz)
-    for key, low, high, _ in segs:
-        if key == band:
-            return low, high
-    return segs[0][1], segs[0][2]
+def _band_for(band):
+    """Resolve a band key to (low_mhz, high_mhz), falling back to 2m."""
+    low, high, _ = _BANDS.get(band) or _BANDS[_DEFAULT_BAND]
+    return low, high
 
 # Warn when the shipped KML is older than this (days).
 _KML_STALE_DAYS = 180
@@ -163,19 +146,14 @@ class RepeaterSource(Source):
         return self._cache
 
     # ------------------------------------------------------------------
-    def controls_schema(self, usable_bw_hz=None) -> Dict[str, Any]:
-        segs = _segments(usable_bw_hz)
+    def controls_schema(self) -> Dict[str, Any]:
         return {
             "bandSegments": [
-                {"value": key, "label": label, "center_mhz": (low + high) / 2.0}
-                for key, low, high, label in segs
+                {"value": key, "label": label}
+                for key, (_low, _high, label) in _BANDS.items()
             ],
-            "defaultBand": segs[0][0],
+            "defaultBand": _DEFAULT_BAND,
         }
-
-    def center_freq_hz(self, params: Dict[str, Any]) -> float:
-        low, high = _segment_for(params.get("band"), params.get("usable_bw_hz"))
-        return ((low + high) / 2.0) * 1e6
 
     def list_stations(
         self,
@@ -184,7 +162,7 @@ class RepeaterSource(Source):
         radius_km: float,
         params: Dict[str, Any],
     ) -> List[Station]:
-        low, high = _segment_for(params.get("band"), params.get("usable_bw_hz"))
+        low, high = _band_for(params.get("band"))
 
         results: List[Station] = []
         for r in self._load():
