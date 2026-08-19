@@ -17,7 +17,11 @@ can I hear from here, and let me listen to one".
 ## Principle
 
 The user picks by geography and station identity. The app absorbs the
-receiver's limits.
+receiver's limits — and where a limit has visible consequences, it *shows*
+them rather than asking the user to act on them. Band segments made the user
+solve the radio's problem before reaching the station they wanted. The
+frequency strip (below) instead makes the same constraint legible at a glance,
+which is the difference between a chore and an explanation.
 
 One consequence is accepted explicitly rather than worked around: **activity
 across the whole FM band is not observable.** Every monitored station needs a
@@ -91,6 +95,38 @@ markers simply never go green — honest, and consistent with `activity: false`.
 The band control is hidden whenever `controls.bandSegments` is absent, which
 after this change means always for FM.
 
+### Frequency strip
+
+The map places stations geographically; it cannot show why only some of them
+can be live at once. A horizontal strip spanning the source's band does: each
+station is a tick at its frequency, and a shaded box marks the receiver's
+current window.
+
+- **Scale** is the source's whole band — 88–108 MHz for FM, 144–148 for 2 m,
+  162.400–162.550 for NWS. On NWS the window box is wider than the band, which
+  communicates "all of these are live" without a word of explanation. On FM the
+  box is ~3% of the strip on an HF+ and ~20% on an R2, so switching receivers
+  shows the difference immediately.
+- **Interaction** is click-to-select, identical in effect to clicking a map
+  marker: anchor the front end there and start audio. The window box then
+  slides to the selection. There is no drag: radiod re-derives placement from
+  channel frequencies, so a dragged position is not something the app can hold,
+  and offering it would imply a control that does not exist.
+- **Station ticks** show which are inside the window, so in directory mode the
+  strip explains at a glance why one marker is live and the others are not.
+
+**The window position is measured, not assumed.** The activity monitor already
+polls on a timer; it gains a `poll_status()` read of `first_lo` and the
+front-end edges and broadcasts `{type: "window", low_hz, high_hz, center_hz}`
+to the control sockets. Deriving the box from where the app *believes* it put
+the window would be a model, and this project has repeatedly found radiod's
+actual placement differs from the obvious model — the anchor mechanism exists
+precisely because of one such gap. One extra status exchange every 2 s is a
+fair price for showing the truth.
+
+If the window cannot be read, the strip omits the box rather than drawing a
+guessed one.
+
 ## Components touched
 
 | File | Change |
@@ -100,8 +136,9 @@ after this change means always for FM.
 | `sources/repeaters.py` | band control lists 2 m / 1.25 m / 70 cm only |
 | `sources/nws.py` | drop `center_freq_hz` |
 | `radio_controller.py` | `WINDOW_FILL` + fit decision in `apply_stations`; drop `tune_center`/`band_center_hz` |
-| `app.py` | `activity` flag in results; stop calling `tune_center`; stop injecting `usable_bw_hz` |
-| `frontend/app.js` | permanent labels; hide band control; honour `activity` |
+| `app.py` | `activity` flag in results; `window` broadcast; stop calling `tune_center`; stop injecting `usable_bw_hz` |
+| `frontend/app.js` | permanent labels; hide band control; honour `activity`; frequency strip |
+| `frontend/index.html` | strip container |
 
 ## Error handling
 
@@ -128,10 +165,15 @@ reads 0.03.
 4. Switch to the R2 → repeaters flip from directory to fully monitored with no
    code change.
 5. Stop the app → every channel released, including the anchor.
+6. Frequency strip → box position matches `first_lo` read directly from
+   radiod; clicking a tick plays that station and moves the box; switching
+   from the HF+ to the R2 visibly widens the box.
 
 ## Out of scope
 
 - Scanning the window across a band to sample activity.
+- Dragging the window box (see above — radiod will not hold a placement that
+  no channel justifies).
 - Any change to the anchor mechanism, Opus path, or band-independent channel
   convergence — all working and verified.
 - The upstream radiod `set_freq` margin bug, which the anchor works around.
