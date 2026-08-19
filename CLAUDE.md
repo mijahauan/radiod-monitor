@@ -90,9 +90,8 @@ This is the unified successor to the sibling projects `../nws-monitor` and `../r
 [backend/sources/base.py](backend/sources/base.py) defines:
 
 - **`Station`** — one monitorable transmitter: `id`, `name`, `freq_hz`, `lat`, `lon`, `distance_km`, `extra: dict`. The `extra` dict is source-specific popup content that the frontend renders verbatim (channel number for NWS, offset/tone for repeaters, etc).
-- **`Source`** — base class with three methods subclasses override:
-  - `controls_schema() -> dict` — JSON-serializable description of per-source UI controls. Currently supports `bandSegments: [{value, label, center_mhz}]` with a `defaultBand`.
-  - `center_freq_hz(params) -> float` — radiod front-end center frequency for the given params.
+- **`Source`** — base class with two methods subclasses override:
+  - `controls_schema() -> dict` — JSON-serializable description of per-source UI controls. Currently supports `bandSegments: [{value, label}]` for real amateur bands (2m, 1.25m, 70cm), never receiver-sized slices.
   - `list_stations(lat, lon, radius_km, params) -> list[Station]`.
 
 Registry lives in [backend/sources/__init__.py](backend/sources/__init__.py); adding a new source is one import + one entry in `_SOURCES`. Three sources ship:
@@ -107,52 +106,34 @@ It is not what configures the decoder, because a source cannot know the answer: 
 
 The authority is the stream itself. Every Opus packet states its channel count in bit 2 of its TOC byte (RFC 6716 §3.1); `audio_streamer.opus_channels()` reads it from the first frame, and the audio WebSocket sends `{"type": "config", "channels": N}` as a text message ahead of any binary frame. The browser configures `AudioDecoder` on that message and ignores frames until it arrives (Opus frames are self-contained, so the few dropped cost a few ms). A listener joining a stream already in progress is handed the stored value on connect.
 
-### Band segments are a property of the radio, not the source
+### The receiver's window is the app's problem, not the user's
 
-A `Source` that spans more spectrum than the receiver can cover at once must
-cut it into segments sized to that receiver — `segment_band()` in
-[backend/sources/base.py](backend/sources/base.py), at `SEGMENT_FILL` (80%) of
-the usable window. Hardcoded segments are wrong on every radio but the one
-they were written for.
+A `Source` returns every station within the geographic radius. It does **not**
+subdivide its band to fit the receiver — that was `segment_band()`, removed on
+2026-08-19 after it produced 38 FM segments and 71 repeater segments on the
+Airspy HF+'s 660.5 kHz window, making the user solve the radio's problem before
+reaching the station they wanted.
 
-**Where the number comes from.** radiod reports the front end's usable IF
-limits as `FE_LOW_EDGE`/`FE_HIGH_EDGE` — the same `Frontend.min_IF`/`max_IF`
-that `set_freq()` tests a channel against. `RadioController.probe_frontend()`
-reads them on connect (and on every host switch) into `usable_bw_hz`, which
-`app.py` passes to `controls_schema()` and injects into search `params`.
-Deriving the width from `input_samprate` instead would overstate it: this
-Airspy HF+ samples at 768 kHz but reports a 660.5 kHz window, radiod having
-already discounted filter rolloff. Measured widths: **660 kHz** (Airspy HF+ @
-768k), **~8.6 MHz** (Airspy R2 @ 10 Msps), the whole HF spectrum on a
-direct-sampling RX888 (`isreal=True`).
+`RadioController.fits_window()` decides instead, from the measured window
+(`probe_frontend`, `FE_LOW_EDGE`/`FE_HIGH_EDGE`):
 
-The probe costs one throwaway channel — the limits ride along with
-*per-channel* status, so there has to be a channel to ask about.
+- **Set fits** (`span <= usable_bw_hz * WINDOW_FILL`) — a channel per station,
+  live SNR, markers go green. NWS always lands here: 7 channels in 150 kHz fit
+  any receiver this app meets.
+- **Set does not fit** — no channels; the list is a directory, and a channel is
+  created only when a listener picks a station. The FM band is 20 MHz and fits
+  no window, so activity across it is simply not observable — an accepted
+  consequence, reported to the UI as `activity: false` rather than hidden.
 
-**Why it matters more than it looks.** radiod is frequency-first: `set_freq()`
-accepts the channel frequency, then retunes the front end *only* if the
-resulting IF falls outside the window, and then "as little as possible"
-(`radio.c`). One window, shared by every channel. So a segment wider than the
-window does not merely show unreachable stations — it makes them
-*unlistenable*, and the channels inside it fight each other, each creation
-dragging the window off the last. Sizing segments to the window is what makes
-the activity map mean anything: every station shown is simultaneously
-receivable, and radiod never has to retune at all.
+Measured windows: **660.5 kHz** (Airspy HF+ @ 768k), **4.1 MHz** (Airspy R2 @
+10 Msps, `isreal=True`, window −4700..−600 kHz — *not* centred on the LO), and
+the whole HF spectrum on a direct-sampling RX888.
 
-Segment keys (`fm_3`, `2m_5`) therefore encode a division that depends on the
-connected radio. A key saved by the browser or chosen before a host switch may
-not exist afterwards, so `_segment_for()` in each source falls back to a sane
-segment rather than failing the search.
-
-**Focus is the fallback, not the mechanism.** `RadioController.focus_on()`
-aims the window at one station by re-asserting its frequency
-(`radio_status.c` documents `set_freq` on an unchanged frequency as the way to
-"possibly reassert front end tuner control"). It is sticky — re-applied after
-`apply_stations`, since every channel created moves the window — and it is
-what rescues a selection outside the current window. `set_first_lo()` does
-**not** work for this: radiod overrides it (measured identical `first_lo` with
-no LO command, with the right one, and with a deliberately wrong one), which
-is why `tune_center()` is now advisory only.
+The frequency strip in the UI draws each station at its frequency and the
+window at its **measured** position, broadcast as `{type: "window"}` by the
+activity monitor. Never infer that position from what the app believes it set:
+`focus_on()`'s anchor mechanism exists precisely because radiod's real
+placement differed from the obvious model.
 
 **Other clients compete.** The front end is global to the radiod instance.
 `ka9q-web` against the same radiod requests its own window and drags the
@@ -162,7 +143,7 @@ front end away; it must not run alongside this app on one receiver.
 
 Identical in shape to the aligned nws-monitor/repeater-monitor, just generalized:
 
-1. **Control plane — [backend/radio_controller.py](backend/radio_controller.py).** On a `search` message, the active `Source` produces a station list and a center frequency. `apply_stations()` converges the channel set. (`tune_center()` no longer tunes anything — radiod owns front-end placement; see the band-segment section above.) Channels live on a single stable multicast destination derived from `generate_multicast_ip("radiod-monitor")` — shared across all sources, so mode switching is a delta on the channel set rather than a teardown. SSRCs are deterministic (hash of frequency, preset, sample_rate, encoding, destination, agc, gain=0.0, and the radiod identity) so they survive server restarts and can be independently rediscovered by the audio streamer. Per-user squelch is applied *after* ensure_channel so it doesn't perturb the hash.
+1. **Control plane — [backend/radio_controller.py](backend/radio_controller.py).** On a `search` message, the active `Source` returns a station list; `apply_stations()` converges the channel set based on what fits in the receiver's window. Channels live on a single stable multicast destination derived from `generate_multicast_ip("radiod-monitor")` — shared across all sources, so mode switching is a delta on the channel set rather than a teardown. SSRCs are deterministic (hash of frequency, preset, sample_rate, encoding, destination, agc, gain=0.0, and the radiod identity) so they survive server restarts and can be independently rediscovered by the audio streamer. Per-user squelch is applied *after* ensure_channel so it doesn't perturb the hash.
 
    **Convergence is a diff, and that is load-bearing.** Because the SSRC is a deterministic hash of exactly the parameters that define a channel, the wanted SSRC set is computable *before* talking to radiod — `allocate_ssrc()` with the same arguments `ensure_channel()` uses internally, including `radiod_host=control.status_address`. An existing channel on our destination whose SSRC is in that set is correct by construction, so it is left untouched; only SSRCs outside the set are removed, and only missing ones are created.
 
@@ -194,7 +175,8 @@ POST /api/radiod/select  {host}        → {ok, host, changed}
 GET  /api/sources                      → {sources: [{key, display_name, preset, controls}]}
 WS   /ws/control                       ← JSON messages
   → {type: "search", mode, location, radius, squelch, params}
-  ← {type: "results", mode, lat, lon, stations: [Station]}
+  ← {type: "results", mode, lat, lon, activity, stations: [Station]}
+  ← {type: "window", low_hz, high_hz, center_hz}
   ← {type: "activity", freq, isActive, snr}
   ← {type: "error", message}
 WS   /ws/audio/{freq_hz}
