@@ -390,7 +390,7 @@ async def websocket_audio(websocket: WebSocket, freq_hz: float):
     except Exception as e:
         logger.debug(f"audio ws error for {freq_hz/1e6:.3f} MHz: {e}")
     finally:
-        if await streamer.remove_listener(freq_hz, queue, controller):
+        if await streamer.remove_listener(freq_hz, queue):
             # Nobody is listening any more, so stop pinning the front end to
             # this station; the next Listen re-aims it.
             controller.clear_focus()

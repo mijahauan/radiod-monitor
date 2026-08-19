@@ -93,6 +93,9 @@ class RadioController:
         # SSRC of the anchor channel that positions the front end (see
         # focus_on). One at most, moved rather than re-created.
         self._anchor_ssrc: Optional[int] = None
+        # Toggled on every anchor placement so consecutive anchors for the
+        # SAME station don't hash to the same SSRC -- see _ANCHOR_NUDGE_HZ.
+        self._anchor_nudge_on: bool = False
         self._apply_lock = threading.Lock()
 
     async def connect(self):
@@ -333,6 +336,19 @@ class RadioController:
     # anchor so the LO lands where we want it.
     _ANCHOR_MARGIN_HZ = 6_000.0
 
+    # Anchors are removed (clear_focus) and re-created (_set_focus) on a
+    # timescale that can easily be faster than radiod's asynchronous teardown
+    # of the old one -- a user leaving and immediately returning to the same
+    # station recomputes the identical anchor_hz, hence the identical
+    # deterministic SSRC, and ensure_channel then "reuses" a channel radiod
+    # is still reaping instead of creating a live one (the same class of race
+    # CLAUDE.md documents for the station convergence diff). Toggling a 1 kHz
+    # nudge on/off between successive placements changes the SSRC without
+    # changing where the window lands: 1 kHz is far inside the anchor's own
+    # ±5 kHz "am" filter, so it is inaudible and irrelevant to placement --
+    # it exists purely to dodge the SSRC collision.
+    _ANCHOR_NUDGE_HZ = 1_000.0
+
     def _set_focus(self, freq_hz: float) -> bool:
         """Centre the front-end window on `freq_hz` using an anchor channel.
 
@@ -430,6 +446,14 @@ class RadioController:
                     f"no anchor needed"
                 )
                 return True
+
+        # See _ANCHOR_NUDGE_HZ: alternate the anchor frequency by a small
+        # amount so back-to-back anchors for the same station don't collide
+        # with a still-being-reaped SSRC.
+        self._anchor_nudge_on = not self._anchor_nudge_on
+        if self._anchor_nudge_on:
+            anchor_hz += self._ANCHOR_NUDGE_HZ
+
         try:
             anchor = self.control.ensure_channel(
                 frequency_hz=anchor_hz,
