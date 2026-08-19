@@ -143,12 +143,23 @@ class RadioController:
                     pass
         return self.usable_bw_hz
 
+    # Threshold used to hold a squelch open that radiod will not let us
+    # switch off. Low enough that any demodulated signal clears it.
+    SQUELCH_WIDE_OPEN_DB = -20.0
+
     def _squelch_args(self) -> dict:
         """
         Build set_squelch kwargs honoring the active source's snr_squelch flag.
-        When SNR squelch is disabled (e.g. wfm, which doesn't publish SNR),
-        we disable squelch entirely so the channel stays open and RTP packets
-        flow continuously.
+
+        When a source asks for no SNR squelch, we do *not* send enable=False:
+        radiod's wfm demodulator sets `chan->squelch.snr_enable = true`
+        unconditionally when its thread starts (wfm.c), so the disable is
+        silently reverted and the channel stays shut. Measured: wfm with
+        enable=False emits zero RTP; the same channel with the squelch left
+        enabled at a -20 dB threshold emits continuously (301 packets in 6 s).
+
+        So the way to keep such a channel open is a threshold below anything
+        the demod will report, not a flag radiod overrides.
         """
         if self.snr_squelch_enabled:
             return {
@@ -157,7 +168,9 @@ class RadioController:
                 "close_snr_db": self.squelch_threshold - 2.0,
             }
         return {
-            "enable": False,
+            "enable": True,
+            "open_snr_db": self.SQUELCH_WIDE_OPEN_DB,
+            "close_snr_db": self.SQUELCH_WIDE_OPEN_DB - 5.0,
         }
 
     def set_squelch(self, threshold_db: float):

@@ -9,11 +9,13 @@ dependencies = [
     "websockets",
     "maidenhead",
     "pydantic>=2.0",
-    # Floor is 3.25.0, not 3.24.0: 3.25.0 is the first release with
-    # RadiodStream(raw_payloads=True), which the audio plane requires to
-    # receive Opus frames at all. Earlier versions drop OPUS payloads
-    # silently — the stream stays healthy and delivers nothing.
-    "ka9q-python>=3.25.0",
+    # 3.25.0 is the first release with RadiodStream(raw_payloads=True),
+    # which the audio plane requires to receive Opus frames at all; earlier
+    # versions drop OPUS payloads silently. 3.25.1 fixes DEMOD_TYPE being
+    # sent in contradiction to the preset, which ran the narrowband FM
+    # demodulator behind the wfm preset and made broadcast FM produce no
+    # audio at all. Neither failure reports an error, so do not lower this.
+    "ka9q-python>=3.25.1",
 ]
 
 [tool.setuptools]

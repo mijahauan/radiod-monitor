@@ -237,15 +237,24 @@ Hardware note: `radiod@airspy-generic` (the wideband Airspy R2) crash-loops with
 The HF+ **does** tune VHF: measured clean tuning at 146 MHz and 36 dB SNR at
 162 MHz (NWR audio plays). What it cannot do is cover much at once — a 660.5 kHz
 window — which is why band segments are now cut to the radio rather than fixed.
-Broadcast FM fits this radio fine — that was an earlier misdiagnosis. Measured
-at 91.3 MHz, radiod places the window at `first_lo ± 330.2 kHz` and puts the
-channel at IF +219.2 kHz, exactly `max_IF - filter.max_IF - fudge`, so the whole
-±110 kHz wfm filter lands inside. The 384 kHz composite path fits the 768 kHz
-input too. A wfm channel there has produced decodable audio.
+Broadcast FM works on this radio. Getting there took fixing two bugs, and the
+earlier guesses in this file (front-end bandwidth, then antenna) were both wrong
+— worth remembering when the next mode produces silence.
 
-What is missing is a carrier: an HF antenna gives no real FM broadcast signal,
-`am` reads only noise-level energy in the FM band, and the wfm demod reports
-`snr=-inf`. Note `wfm.c` sets `chan->squelch.snr_enable = true` unconditionally,
-so `Source.snr_squelch = False` is **inert for wfm** — radiod re-enables it, and
-no threshold opens a squelch whose SNR is `-inf`. FM needs a VHF antenna, not a
-different receiver.
+1. **ka9q-python sent `DEMOD_TYPE` contradicting the preset.** It derived the
+   demodulator from a five-name allowlist and sent it right after `PRESET` in
+   the same packet, so the later value won: `wfm` got `FM_DEMOD`, and radiod
+   ran the *narrowband* FM demod behind the wfm preset's ±110 kHz filter. That
+   emits nothing and reports `snr=-inf` forever. Fixed in ka9q-python 3.25.1
+   (which is why the pin is >= 3.25.1).
+
+2. **`Source.snr_squelch = False` cannot be honoured as written.** `wfm.c` sets
+   `chan->squelch.snr_enable = true` unconditionally when the demod thread
+   starts, so `set_squelch(enable=False)` is reverted. `_squelch_args()` holds
+   the squelch open with a −20 dB threshold instead.
+
+The window was never the problem: radiod places the channel at IF +219.2 kHz,
+exactly `max_IF - filter.max_IF - fudge`, so the whole ±110 kHz filter lands
+inside the 660.5 kHz window, and the 384 kHz composite path fits the 768 kHz
+input. Verified end-to-end: FM stations stream ~9 s of continuous audio at
+rms 0.06 through the browser path.
