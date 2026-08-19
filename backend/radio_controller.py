@@ -67,6 +67,10 @@ class RadioController:
         # set the audio plane validates against -- not active_channels, which
         # fills in gradually while channels are still being created.
         self.monitored_freqs: set = set()
+        # Whether the last-applied station set fit inside the receiver's
+        # window and therefore got live channels (vs. directory mode, where
+        # no channels are created up front). See fits_window / apply_stations.
+        self.activity_available: bool = True
         # Measured usable IF window of the connected receiver, in Hz --
         # probed from radiod's FE_LOW_EDGE/FE_HIGH_EDGE on connect. The
         # controller needs this to know what the radio can actually cover.
@@ -155,6 +159,33 @@ class RadioController:
     # Threshold used to hold a squelch open that radiod will not let us
     # switch off. Low enough that any demodulated signal clears it.
     SQUELCH_WIDE_OPEN_DB = -20.0
+
+    # Fraction of the receiver's usable window a monitored station set may
+    # span. radiod parks channels near the window edge by design, and the wfm
+    # demodulator cannot demodulate there (see CLAUDE.md), so leaving margin
+    # is not cosmetic.
+    WINDOW_FILL = 0.8
+
+    # Assumed window when radiod does not report FE_LOW_EDGE/FE_HIGH_EDGE.
+    # Roughly an Airspy R2 at 10 Msps.
+    DEFAULT_USABLE_BW_HZ = 8_000_000.0
+
+    def fits_window(self, freqs) -> bool:
+        """True if every one of `freqs` can be monitored simultaneously.
+
+        A monitored station needs a radiod channel inside the front end's
+        window, and there is one window shared by every channel. So this is
+        what decides whether the activity map can mean anything: with the
+        whole set inside the window each channel reports real SNR, and
+        without it the app monitors nothing and serves the station list as a
+        directory instead.
+        """
+        values = [float(f) for f in freqs]
+        if len(values) < 2:
+            return True
+        span = max(values) - min(values)
+        window = self.usable_bw_hz or self.DEFAULT_USABLE_BW_HZ
+        return span <= window * self.WINDOW_FILL
 
     def _squelch_args(self) -> dict:
         """
@@ -262,7 +293,11 @@ class RadioController:
         """
         if not self.control:
             return False
-        if not any(abs(f - freq_hz) < 1.0 for f in self.active_channels.values()):
+        # Gate on monitored_freqs, not active_channels: in directory mode
+        # active_channels is empty by design (see fits_window), but the
+        # station the listener picked is still in monitored_freqs, and this
+        # is exactly the anchor placement that keeps its audio continuous.
+        if not any(abs(f - freq_hz) < 1.0 for f in self.monitored_freqs):
             logger.warning(
                 f"focus_on: {freq_hz/1e6:.3f} MHz is not in the monitored set"
             )
@@ -331,8 +366,11 @@ class RadioController:
     def _reassert_focus(self):
         """Re-aim the front end after channel churn has moved it."""
         freq = self.focused_freq_hz
+        # Gate on monitored_freqs, not active_channels -- see _set_focus.
+        # active_channels is empty in directory mode, but the focused
+        # station is still in monitored_freqs and still needs re-centring.
         if freq is not None and any(
-            abs(f - freq) < 1.0 for f in self.active_channels.values()
+            abs(f - freq) < 1.0 for f in self.monitored_freqs
         ):
             self._set_focus(freq)
 
@@ -391,6 +429,18 @@ class RadioController:
         # takes a while, so validating a Listen against created channels
         # rejects stations the user can legitimately see and click.
         self.monitored_freqs = set(new_freqs)
+
+        # A set wider than the window cannot be monitored: channels outside it
+        # report snr=-inf and produce no RTP. Rather than create channels that
+        # cannot work, serve the list as a directory and let the audio plane
+        # create the one channel a listener actually asks for.
+        self.activity_available = self.fits_window(new_freqs)
+        if not self.activity_available:
+            logger.info(
+                f"{len(new_freqs)} stations span more than the receiver's "
+                f"window — directory mode, channels created on demand"
+            )
+            new_freqs = set()
 
         logger.info(
             f"Monitoring {len(new_freqs)} frequencies  preset={preset}  "
