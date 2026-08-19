@@ -234,6 +234,10 @@ function connectControl() {
         const data = JSON.parse(ev.data);
         if (data.type === 'results')        handleSearchResults(data);
         else if (data.type === 'activity')  handleActivityUpdate(data);
+        else if (data.type === 'window') {
+            currentWindow = { low_hz: data.low_hz, high_hz: data.high_hz };
+            drawFreqStrip();
+        }
         else if (data.type === 'error')     alert(data.message);
     };
 }
@@ -316,6 +320,7 @@ function handleSearchResults(data) {
         li.onclick = () => { map.setView([st.lat, st.lon], 12); marker.openPopup(); };
         repeaterList.appendChild(li);
     }
+    drawFreqStrip();
 }
 
 function buildPopup(st) {
@@ -578,6 +583,88 @@ function listenToStation(freqHz, name) {
 }
 window.listenToStation = listenToStation;  // popup onclick
 
+// ---------------------------------------------------------------------------
+// Frequency strip — stations by frequency, and where the receiver's window is.
+// The map answers "who is near me"; this answers "what can the radio hear at
+// once". The window box is drawn only from a measured position (see the
+// "window" message); it is never inferred, because radiod places the front end
+// on its own terms.
+// ---------------------------------------------------------------------------
+let currentWindow = null;   // {low_hz, high_hz} or null
+
+function stripBounds() {
+    if (!stationsData.length) return null;
+    const fs = stationsData.map(s => s.freq_hz);
+    let lo = Math.min(...fs), hi = Math.max(...fs);
+    const pad = Math.max((hi - lo) * 0.05, 200e3);
+    return { lo: lo - pad, hi: hi + pad };
+}
+
+function drawFreqStrip() {
+    const canvas = document.getElementById('freq-strip-canvas');
+    const caption = document.getElementById('freq-strip-caption');
+    if (!canvas) return;
+    const b = stripBounds();
+    canvas.width = canvas.parentElement.clientWidth;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!b) { caption.textContent = ''; return; }
+    const x = hz => ((hz - b.lo) / (b.hi - b.lo)) * canvas.width;
+
+    // Window box first, so ticks draw over it.
+    if (currentWindow) {
+        const x0 = Math.max(0, x(currentWindow.low_hz));
+        const x1 = Math.min(canvas.width, x(currentWindow.high_hz));
+        if (x1 > x0) {
+            ctx.fillStyle = 'rgba(59,130,246,0.18)';
+            ctx.fillRect(x0, 0, x1 - x0, canvas.height - 18);
+            ctx.strokeStyle = 'rgba(59,130,246,0.7)';
+            ctx.strokeRect(x0, 0, x1 - x0, canvas.height - 18);
+        }
+    }
+
+    ctx.strokeStyle = '#334155';
+    ctx.beginPath();
+    ctx.moveTo(0, canvas.height - 18);
+    ctx.lineTo(canvas.width, canvas.height - 18);
+    ctx.stroke();
+
+    for (const st of stationsData) {
+        const sx = x(st.freq_hz);
+        const inWindow = currentWindow &&
+            st.freq_hz >= currentWindow.low_hz && st.freq_hz <= currentWindow.high_hz;
+        ctx.strokeStyle = inWindow ? '#22c55e' : '#94a3b8';
+        ctx.lineWidth = inWindow ? 2 : 1;
+        ctx.beginPath();
+        ctx.moveTo(sx, 6);
+        ctx.lineTo(sx, canvas.height - 18);
+        ctx.stroke();
+    }
+
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '10px sans-serif';
+    ctx.fillText((b.lo / 1e6).toFixed(1), 2, canvas.height - 4);
+    const hiLabel = (b.hi / 1e6).toFixed(1);
+    ctx.fillText(hiLabel, canvas.width - ctx.measureText(hiLabel).width - 2, canvas.height - 4);
+
+    caption.textContent = currentWindow
+        ? `receiver window ${((currentWindow.high_hz - currentWindow.low_hz) / 1e3).toFixed(0)} kHz`
+        : (currentActivityAvailable ? '' : 'wider than the receiver — pick a station to listen');
+}
+
+function freqStripClick(ev) {
+    const b = stripBounds();
+    if (!b || !stationsData.length) return;
+    const canvas = document.getElementById('freq-strip-canvas');
+    const rect = canvas.getBoundingClientRect();
+    const hz = b.lo + ((ev.clientX - rect.left) / rect.width) * (b.hi - b.lo);
+    let best = stationsData[0];
+    for (const st of stationsData) {
+        if (Math.abs(st.freq_hz - hz) < Math.abs(best.freq_hz - hz)) best = st;
+    }
+    listenToStation(best.freq_hz, best.name);
+}
+
 stopAudioBtn.onclick = () => {
     if (currentSession) { currentSession.stop(); currentSession = null; }
     audioPanel.classList.add('hidden');
@@ -613,6 +700,10 @@ squelchSlider.addEventListener('input',  (e) => { squelchValue.textContent = e.t
 squelchSlider.addEventListener('change', () => triggerSearch());
 radiusSlider.addEventListener('input',  (e) => { radiusValue.textContent = e.target.value; });
 radiusSlider.addEventListener('change', () => triggerSearch());
+
+document.getElementById('freq-strip-canvas')
+        .addEventListener('click', freqStripClick);
+window.addEventListener('resize', drawFreqStrip);
 
 // ---------------------------------------------------------------------------
 // Boot
