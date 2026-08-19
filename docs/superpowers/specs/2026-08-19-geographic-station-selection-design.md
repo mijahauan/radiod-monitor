@@ -30,15 +30,19 @@ keeps working and keeps meaning something.
 
 ### Bands stay; segments go
 
+`Source.controls_schema()` loses its `usable_bw_hz` argument: with segments
+gone, the remaining controls do not depend on the receiver. `app.py` stops
+passing it and stops injecting `usable_bw_hz` into search `params`.
+
 Band selection survives only where it names a real amateur band the user has
 an opinion about — 2 m, 1.25 m, 70 cm — because that reflects antennas and
 interests, not receiver bandwidth. Sub-segmentation (`2m_1…2m_8`,
 `fm_1…fm_38`) is removed entirely. Commercial FM gets no control at all: 88–108
 MHz is one band.
 
-`segment_band()` and `SEGMENT_FILL` in `sources/base.py` are removed. The
-window width they were computed from is still needed, but for a different
-decision (below).
+`segment_band()` in `sources/base.py` is removed. `SEGMENT_FILL` is kept but
+renamed `WINDOW_FILL` and moved to `radio_controller.py`, which is now its only
+consumer: it no longer sizes segments, it decides whether a station set fits.
 
 ### `Source.center_freq_hz()` is deleted
 
@@ -50,8 +54,9 @@ the same misunderstanding back. `RadioController.tune_center()` and
 
 ### Monitoring adapts to the measured window
 
-`apply_stations()` gains one decision, made from the span of the stations the
-search returned against `usable_bw_hz` (already probed per host from
+`apply_stations()` gains one decision, made by comparing the station set's
+**span** — `max(freq_hz) - min(freq_hz)`, zero for a single station — against
+`usable_bw_hz` (already probed per host from
 `FE_LOW_EDGE`/`FE_HIGH_EDGE`):
 
 - **Span fits the window** → create a channel per station, as today. The
@@ -65,8 +70,9 @@ search returned against `usable_bw_hz` (already probed per host from
 (8 MHz) for the comparison, matching today's behaviour when radiod does not
 report the edges.
 
-Fit is tested against `usable_bw_hz * 0.8`, the same margin the segment sizing
-used, so a station never sits hard against the window edge.
+Fit is tested as `span <= usable_bw_hz * WINDOW_FILL` (0.8), leaving margin so
+no station sits hard against the window edge — radiod parks channels near the
+edge by design, and wfm cannot demodulate there (see CLAUDE.md).
 
 ### The results message says which mode applied
 
@@ -89,12 +95,12 @@ after this change means always for FM.
 
 | File | Change |
 |---|---|
-| `sources/base.py` | drop `segment_band`, `SEGMENT_FILL`, `center_freq_hz` |
+| `sources/base.py` | drop `segment_band` and `center_freq_hz`; `controls_schema()` loses its argument |
 | `sources/fm.py` | no controls; `list_stations` filters by radius only |
 | `sources/repeaters.py` | band control lists 2 m / 1.25 m / 70 cm only |
 | `sources/nws.py` | drop `center_freq_hz` |
-| `radio_controller.py` | fit decision in `apply_stations`; drop `tune_center` |
-| `app.py` | `activity` flag in results; stop calling `tune_center` |
+| `radio_controller.py` | `WINDOW_FILL` + fit decision in `apply_stations`; drop `tune_center`/`band_center_hz` |
+| `app.py` | `activity` flag in results; stop calling `tune_center`; stop injecting `usable_bw_hz` |
 | `frontend/app.js` | permanent labels; hide band control; honour `activity` |
 
 ## Error handling
