@@ -607,6 +607,31 @@ function stripBounds() {
     return { lo: lo - pad, hi: hi + pad };
 }
 
+// Pick a tick step from a 1-2-5 sequence scaled by powers of ten (100 kHz,
+// 200 kHz, 500 kHz, 1 MHz, 2 MHz, 5 MHz, ...) so roughly 6-10 labels appear
+// regardless of span — this has to read sensibly for both a 20 MHz FM span
+// and a 150 kHz NWS span.
+const TICK_TARGET_COUNT = 8;
+
+function niceTickStepHz(spanHz) {
+    const target = spanHz / TICK_TARGET_COUNT;
+    const magnitude = Math.pow(10, Math.floor(Math.log10(target)));
+    const residual = target / magnitude;
+    let niceResidual;
+    if (residual < 1.5) niceResidual = 1;
+    else if (residual < 3.5) niceResidual = 2;
+    else if (residual < 7.5) niceResidual = 5;
+    else niceResidual = 10;
+    return niceResidual * magnitude;
+}
+
+// Decimal places needed to show a step of this size in MHz without losing
+// precision (0.1 MHz steps need one decimal, 0.05 MHz steps need two, ...).
+function tickDecimals(stepHz) {
+    const stepMhz = stepHz / 1e6;
+    return Math.max(0, -Math.floor(Math.log10(stepMhz) + 1e-9));
+}
+
 function drawFreqStrip() {
     const canvas = document.getElementById('freq-strip-canvas');
     const caption = document.getElementById('freq-strip-caption');
@@ -617,6 +642,7 @@ function drawFreqStrip() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (!b) { caption.textContent = ''; return; }
     const x = hz => ((hz - b.lo) / (b.hi - b.lo)) * canvas.width;
+    const axisY = canvas.height - 18;
 
     // Window box first, so ticks draw over it.
     if (currentWindow) {
@@ -624,17 +650,38 @@ function drawFreqStrip() {
         const x1 = Math.min(canvas.width, x(currentWindow.high_hz));
         if (x1 > x0) {
             ctx.fillStyle = 'rgba(59,130,246,0.18)';
-            ctx.fillRect(x0, 0, x1 - x0, canvas.height - 18);
+            ctx.fillRect(x0, 0, x1 - x0, axisY);
             ctx.strokeStyle = 'rgba(59,130,246,0.7)';
-            ctx.strokeRect(x0, 0, x1 - x0, canvas.height - 18);
+            ctx.strokeRect(x0, 0, x1 - x0, axisY);
         }
     }
 
     ctx.strokeStyle = '#334155';
     ctx.beginPath();
-    ctx.moveTo(0, canvas.height - 18);
-    ctx.lineTo(canvas.width, canvas.height - 18);
+    ctx.moveTo(0, axisY);
+    ctx.lineTo(canvas.width, axisY);
     ctx.stroke();
+
+    // Axis ticks + labels — subordinate to the station ticks: shorter marks,
+    // muted color, drawn first so station ticks sit visually on top.
+    const step = niceTickStepHz(b.hi - b.lo);
+    const decimals = tickDecimals(step);
+    ctx.fillStyle = '#64748b';
+    ctx.font = '9px sans-serif';
+    ctx.strokeStyle = '#475569';
+    ctx.lineWidth = 1;
+    const firstTick = Math.ceil(b.lo / step) * step;
+    for (let hz = firstTick; hz <= b.hi; hz += step) {
+        const tx = x(hz);
+        ctx.beginPath();
+        ctx.moveTo(tx, axisY);
+        ctx.lineTo(tx, axisY + 4);
+        ctx.stroke();
+        const label = (hz / 1e6).toFixed(decimals);
+        const w = ctx.measureText(label).width;
+        const lx = Math.min(Math.max(tx - w / 2, 0), canvas.width - w);
+        ctx.fillText(label, lx, canvas.height - 4);
+    }
 
     for (const st of stationsData) {
         const sx = x(st.freq_hz);
@@ -644,15 +691,9 @@ function drawFreqStrip() {
         ctx.lineWidth = inWindow ? 2 : 1;
         ctx.beginPath();
         ctx.moveTo(sx, 6);
-        ctx.lineTo(sx, canvas.height - 18);
+        ctx.lineTo(sx, axisY);
         ctx.stroke();
     }
-
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '10px sans-serif';
-    ctx.fillText((b.lo / 1e6).toFixed(1), 2, canvas.height - 4);
-    const hiLabel = (b.hi / 1e6).toFixed(1);
-    ctx.fillText(hiLabel, canvas.width - ctx.measureText(hiLabel).width - 2, canvas.height - 4);
 
     caption.textContent = currentWindow
         ? `receiver window ${((currentWindow.high_hz - currentWindow.low_hz) / 1e3).toFixed(0)} kHz`
@@ -670,6 +711,57 @@ function freqStripClick(ev) {
         if (Math.abs(st.freq_hz - hz) < Math.abs(best.freq_hz - hz)) best = st;
     }
     listenToStation(best.freq_hz, best.name);
+    // listenToStation() closes any open popup on the map; re-open the one
+    // for the station we just picked so the map and the strip agree on
+    // what's selected. Guarded: markers is keyed by freq_hz and a station
+    // just added to the strip could in principle not have a marker yet.
+    const marker = markers[best.freq_hz];
+    if (marker) marker.openPopup();
+}
+
+// Nearest-tick hover: a floating label near the cursor, not the canvas
+// `title` attribute (too slow/coarse to update per pixel).
+const FREQ_STRIP_HOVER_PX = 6;
+
+function freqStripMouseMove(ev) {
+    const hoverEl = document.getElementById('freq-strip-hover');
+    if (!hoverEl) return;
+    const b = stripBounds();
+    if (!b || !stationsData.length) { hoverEl.classList.add('hidden'); return; }
+    const canvas = document.getElementById('freq-strip-canvas');
+    const container = canvas.parentElement;
+    const canvasRect = canvas.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    const mx = ev.clientX - canvasRect.left;
+    const x = hz => ((hz - b.lo) / (b.hi - b.lo)) * canvas.width;
+
+    let best = null, bestDist = Infinity;
+    for (const st of stationsData) {
+        const dist = Math.abs(x(st.freq_hz) - mx);
+        if (dist < bestDist) { bestDist = dist; best = st; }
+    }
+
+    if (!best || bestDist > FREQ_STRIP_HOVER_PX) {
+        hoverEl.classList.add('hidden');
+        return;
+    }
+
+    hoverEl.textContent = `${best.name} ${(best.freq_hz / 1e6).toFixed(3)}`;
+    hoverEl.classList.remove('hidden');
+    // Position relative to the container (which is the positioning parent),
+    // offset from the cursor, clamped so the label can't run off either edge.
+    let left = ev.clientX - containerRect.left + 10;
+    const maxLeft = containerRect.width - hoverEl.offsetWidth - 4;
+    left = Math.min(Math.max(left, 4), Math.max(maxLeft, 4));
+    let top = ev.clientY - containerRect.top - 26;
+    top = Math.max(top, 4);
+    hoverEl.style.left = `${left}px`;
+    hoverEl.style.top = `${top}px`;
+}
+
+function freqStripMouseLeave() {
+    const hoverEl = document.getElementById('freq-strip-hover');
+    if (hoverEl) hoverEl.classList.add('hidden');
 }
 
 stopAudioBtn.onclick = () => {
@@ -708,8 +800,10 @@ squelchSlider.addEventListener('change', () => triggerSearch());
 radiusSlider.addEventListener('input',  (e) => { radiusValue.textContent = e.target.value; });
 radiusSlider.addEventListener('change', () => triggerSearch());
 
-document.getElementById('freq-strip-canvas')
-        .addEventListener('click', freqStripClick);
+const freqStripCanvasEl = document.getElementById('freq-strip-canvas');
+freqStripCanvasEl.addEventListener('click', freqStripClick);
+freqStripCanvasEl.addEventListener('mousemove', freqStripMouseMove);
+freqStripCanvasEl.addEventListener('mouseleave', freqStripMouseLeave);
 window.addEventListener('resize', drawFreqStrip);
 
 // ---------------------------------------------------------------------------

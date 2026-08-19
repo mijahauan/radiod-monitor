@@ -43,6 +43,8 @@ from typing import Dict, List, Optional
 from ka9q import ManagedStream, StreamQuality
 from ka9q.types import Encoding
 
+from .radio_controller import CHANNEL_LIFETIME_FRAMES
+
 logger = logging.getLogger(__name__)
 
 # Restoration is for surviving a radiod restart, not for waiting out a host
@@ -174,6 +176,7 @@ class AudioStreamer:
                 destination=dest,
                 encoding=Encoding.OPUS,
                 timeout=5.0,
+                lifetime=CHANNEL_LIFETIME_FRAMES,
             )
             await asyncio.to_thread(
                 _assert_opus, controller.control, channel.ssrc, freq_key

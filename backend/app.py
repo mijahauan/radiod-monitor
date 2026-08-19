@@ -353,13 +353,38 @@ async def websocket_audio(websocket: WebSocket, freq_hz: float):
         return
     queue: asyncio.Queue = asyncio.Queue(maxsize=200)
     await streamer.add_listener(freq_hz, queue, controller)
-    try:
+
+    async def _pump():
         while True:
             item = await queue.get()
             if isinstance(item, dict):
                 await websocket.send_json(item)
             else:
                 await websocket.send_bytes(item)
+
+    try:
+        sender = asyncio.create_task(_pump())
+        # The browser never sends us anything on this socket, so the only
+        # way receive() completes is a disconnect (WebSocketDisconnect) or
+        # the connection dying underneath us. Racing it against the sender
+        # is what notices a silent station's listener going away -- without
+        # it, queue.get() blocks forever when no RTP ever arrives, and the
+        # ManagedStream cycles drop/restore every 5 s with nobody watching.
+        receiver = asyncio.create_task(websocket.receive())
+        done, pending = await asyncio.wait(
+            {sender, receiver}, return_when=asyncio.FIRST_COMPLETED
+        )
+        for t in pending:
+            t.cancel()
+        for t in pending:
+            try:
+                await t
+            except (asyncio.CancelledError, Exception):
+                pass
+        for t in done:
+            exc = t.exception()
+            if exc is not None and not isinstance(exc, WebSocketDisconnect):
+                raise exc
     except WebSocketDisconnect:
         pass
     except Exception as e:

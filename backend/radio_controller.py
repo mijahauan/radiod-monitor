@@ -36,6 +36,17 @@ logger = logging.getLogger(__name__)
 # one is in range of every radiod this app talks to.
 PROBE_FREQ_HZ = 10_000_000.0
 
+# LIFETIME to pass to ensure_channel(), in frames. radiod's Blocktime here is
+# 20 ms/frame, so 50 frames = 1 s. This only governs how promptly radiod
+# reaps a channel *after* we zero its frequency (radio.c:1415 -- reaping
+# requires both freq==0 and lifetime expiry); it does not affect a live,
+# tuned channel at all -- measured: a channel created with a 2 s lifetime
+# survived 30 s untouched while tuned. Without a short lifetime here, radiod
+# falls back to DEFAULT_LIFETIME (20 s), which is why removed channels (the
+# anchor, stale stations, on-demand listener channels) used to linger for
+# 15-25 s after we asked for them to go away.
+CHANNEL_LIFETIME_FRAMES = 50
+
 
 class RadioController:
     def __init__(self, radiod_host: str = "airspyhf-status.local"):
@@ -121,6 +132,7 @@ class RadioController:
                 destination=self.destination,
                 encoding=Encoding.OPUS,
                 timeout=5.0,
+                lifetime=CHANNEL_LIFETIME_FRAMES,
             )
             probe_ssrc = probe.ssrc
             status = self.control.poll_status(probe_ssrc, timeout=3.0)
@@ -400,6 +412,7 @@ class RadioController:
                 destination=self.destination,
                 encoding=Encoding.OPUS,
                 timeout=5.0,
+                lifetime=CHANNEL_LIFETIME_FRAMES,
             )
         except Exception as e:
             logger.warning(f"focus_on: could not place anchor channel: {e}")
@@ -685,6 +698,7 @@ class RadioController:
                     destination=self.destination,
                     encoding=Encoding.OPUS,
                     timeout=5.0,
+                    lifetime=CHANNEL_LIFETIME_FRAMES,
                 )
                 ssrc = channel.ssrc
                 self.active_channels[ssrc] = freq_hz
