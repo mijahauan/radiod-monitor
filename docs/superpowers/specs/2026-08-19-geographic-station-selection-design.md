@@ -80,10 +80,10 @@ edge by design, and wfm cannot demodulate there (see CLAUDE.md).
 
 ### The results message says which mode applied
 
-`{type: "results"}` gains `activity: true|false`. The frontend uses it to omit
-the activity legend when activity cannot be reported, rather than showing a
-legend for green markers that will never appear. This informs without asking
-the user to do anything.
+`{type: "results"}` gains `activity: true|false`. There is no activity legend
+in the UI to hide, so its consumer is the frequency strip's caption, which says
+in one line that the band is wider than the receiver and to pick a station.
+This informs without asking the user to do anything.
 
 ### Map
 
@@ -92,8 +92,10 @@ click-to-reveal popups; the popup keeps the per-source `extra` detail. Green
 still means a channel reporting SNR above threshold, so in directory mode
 markers simply never go green — honest, and consistent with `activity: false`.
 
-The band control is hidden whenever `controls.bandSegments` is absent, which
-after this change means always for FM.
+The band control needs no hiding logic: `renderModeControls()` already rebuilds
+`#modeControls` from scratch on every source change and only creates the
+dropdown when `bandSegments` is non-empty. Its label changes from "Band
+Segment" to "Band", since these are now real bands rather than slices of one.
 
 ### Frequency strip
 

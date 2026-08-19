@@ -532,8 +532,9 @@ In `handleSearchResults(data)` in `frontend/app.js`, after
 
 ```javascript
     // False when the station set is wider than the receiver's window: no
-    // channels exist, so no marker will ever go green. Say nothing rather
-    // than promising activity that cannot arrive.
+    // channels exist, so no marker will ever go green. There is no activity
+    // legend in this UI to hide, so the flag's only consumer is the frequency
+    // strip caption (Task 5), which explains the situation in one line.
     currentActivityAvailable = data.activity !== false;
 ```
 
@@ -548,19 +549,29 @@ In the same function, after `marker.bindPopup(buildPopup(st));` add:
         );
 ```
 
-- [ ] **Step 2: Hide the band control when a source has none**
+- [ ] **Step 2: Relabel the dropdown — no hiding needed**
 
-Find where the band dropdown is populated from `controls.bandSegments` and
-ensure the container is hidden when the key is absent. Add to that block:
+`renderModeControls()` already does the right thing: it clears
+`modeControls.innerHTML` and builds the dropdown only when
+`c.bandSegments` is a non-empty array. With FM and NWS returning `{}` after
+Task 1, the control simply is not rendered. Do **not** add display-toggling
+logic.
+
+One change is needed. The label is wrong now that these are real bands rather
+than slices of one. In `renderModeControls()`, change:
 
 ```javascript
-    const hasBands = !!(controls && controls.bandSegments && controls.bandSegments.length);
-    if (bandControlEl) bandControlEl.style.display = hasBands ? '' : 'none';
+        label.textContent = 'Band Segment';
 ```
 
-using whatever element variable already wraps the dropdown; if none exists,
-add `const bandControlEl = document.getElementById('band-control');` and give
-that id to the dropdown's wrapper element in `frontend/index.html`.
+to:
+
+```javascript
+        label.textContent = 'Band';
+```
+
+Also update the docstring above the function: `bandSegments: [{value, label}]`
+— the `center_mhz` key is gone as of Task 1.
 
 - [ ] **Step 3: Verify in the browser**
 
@@ -568,15 +579,17 @@ that id to the dropdown's wrapper element in `frontend/index.html`.
 ./radiod-monitor.sh restart && sleep 10
 ```
 
-Open https://localhost:8443/ and check: selecting Commercial FM hides the band
-dropdown and shows stations across the whole band with permanent labels;
-selecting NOAA Weather Radio also hides it; VHF/UHF Repeaters shows exactly
-three bands.
+Open https://localhost:8443/ and check: selecting Commercial FM shows **no**
+band dropdown and stations across the whole band with permanent labels;
+NOAA Weather Radio shows none either; VHF/UHF Repeaters shows a "Band"
+dropdown with exactly three entries. Switch FM → Repeaters → FM and confirm
+the dropdown appears and disappears cleanly (this is what verifies the
+existing rebuild logic, which is why no hiding code was added).
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add frontend/ && git commit -m "feat(ui): label stations on the map, drop the band control where it has no meaning"
+git add frontend/ && git commit -m "feat(ui): label stations on the map, relabel Band Segment to Band"
 ```
 
 ---
