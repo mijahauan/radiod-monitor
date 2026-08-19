@@ -75,6 +75,11 @@ class RadioController:
         # probed; re-probed on every host change because the answer is a
         # property of the radio, not of this app.
         self.usable_bw_hz: Optional[float] = None
+        self.fe_low_edge_hz: Optional[float] = None
+        self.fe_high_edge_hz: Optional[float] = None
+        # SSRC of the anchor channel that positions the front end (see
+        # focus_on). One at most, moved rather than re-created.
+        self._anchor_ssrc: Optional[int] = None
         self._apply_lock = threading.Lock()
 
     async def connect(self):
@@ -122,6 +127,12 @@ class RadioController:
             high = getattr(fe, "fe_high_edge", None)
             if low is not None and high is not None and high > low:
                 self.usable_bw_hz = float(high - low)
+                # Kept separately because the window is not always centred on
+                # the LO: a real-sampling front end (RX888) reports something
+                # like -4700..-600 kHz. focus_on() needs the actual edges, not
+                # just the width.
+                self.fe_low_edge_hz = float(low)
+                self.fe_high_edge_hz = float(high)
                 logger.info(
                     f"{getattr(fe, 'description', self.radiod_host)}: usable "
                     f"window {self.usable_bw_hz/1e3:.1f} kHz "
@@ -232,28 +243,110 @@ class RadioController:
         self.focused_freq_hz = freq_hz
         return self._set_focus(freq_hz)
 
+    # Filter half-width radiod reserves for the anchor's own preset ("am",
+    # ±5 kHz) plus set_freq's 1 kHz fudge. Used to work out where to put the
+    # anchor so the LO lands where we want it.
+    _ANCHOR_MARGIN_HZ = 6_000.0
+
     def _set_focus(self, freq_hz: float) -> bool:
+        """Centre the front-end window on `freq_hz` using an anchor channel.
+
+        Asking radiod to place the window is not the same as asking it to
+        *centre* the window. `set_freq()` retunes only far enough to bring a
+        channel's filter inside, parking it `filter.max_IF + fudge` from the
+        edge -- 111 kHz for wfm. That is fine for a narrowband mode, but the
+        wfm demodulator does not demodulate inside that filter: `wfm.c` runs a
+        384 kHz composite path needing ±192 kHz around the channel, which then
+        overruns the window edge by 81 kHz. The result is a demod that half
+        works -- clear voice in brief fragments, snr flipping to -inf --
+        which is exactly what a listener reports.
+
+        Setting the channel's own frequency cannot fix it, because that is the
+        call that parks it at the edge. What does work is placing a *second*,
+        narrow channel such that radiod's edge-parking of that one leaves the
+        LO on our station: an "am" channel (±5 kHz) at
+        `freq + (high_edge - 6 kHz)` drags the LO to ≈ `freq`. Every other
+        channel then recalculates its own IF against the new LO
+        (`radio.c`: "Retuning the front end will cause all the other channels
+        to recalculate their own IFs"), so the station lands at IF ≈ 0 with the
+        whole composite inside the window -- and radiod never retunes again,
+        because a channel at IF 0 is nowhere near an edge.
+
+        Measured at 102.300 MHz: IF +219.2 kHz, snr=-inf, ~17 frames per 10 s
+        before; IF +0.0 kHz, snr 6.5, 500 frames per 10 s after, with a
+        voice/hiss ratio of 16-30 against 13.8 for a known-good NWR station.
+
+        The idea came from ka9q-web, which runs a spectrum channel alongside
+        its audio channel and so positions the front end without ever
+        commanding the LO.
+        """
         if not self.control:
             return False
+        if not any(abs(f - freq_hz) < 1.0 for f in self.active_channels.values()):
+            logger.warning(
+                f"focus_on: {freq_hz/1e6:.3f} MHz is not in the monitored set"
+            )
+            return False
+        high_edge = self.fe_high_edge_hz
+        if high_edge is None:
+            # Without the front-end edges we cannot compute the anchor
+            # position. Fall back to re-asserting the station itself, which at
+            # least brings it inside the window for narrowband modes.
+            return self._assert_frequency(freq_hz)
+        anchor_hz = freq_hz + (high_edge - self._ANCHOR_MARGIN_HZ)
+        try:
+            anchor = self.control.ensure_channel(
+                frequency_hz=anchor_hz,
+                preset="am",
+                sample_rate=self.sample_rate,
+                gain=0.0,
+                destination=self.destination,
+                encoding=Encoding.OPUS,
+                timeout=5.0,
+            )
+        except Exception as e:
+            logger.warning(f"focus_on: could not place anchor channel: {e}")
+            return self._assert_frequency(freq_hz)
+        # Squelch it shut: the anchor exists to position the front end, not to
+        # be listened to, and an open one is just wasted packets on the wire.
+        try:
+            self.control.set_squelch(anchor.ssrc, enable=True,
+                                     open_snr_db=80.0, close_snr_db=75.0)
+        except Exception:
+            pass
+        self._drop_anchor(keep=anchor.ssrc)
+        self._anchor_ssrc = anchor.ssrc
+        logger.info(
+            f"Front end centred on {freq_hz/1e6:.3f} MHz via anchor at "
+            f"{anchor_hz/1e6:.3f} MHz (SSRC {anchor.ssrc:08x})"
+        )
+        return True
+
+    def _assert_frequency(self, freq_hz: float) -> bool:
+        """Last-resort focus: re-assert the station's own frequency."""
         ssrc = next(
             (s for s, f in self.active_channels.items() if abs(f - freq_hz) < 1.0),
             None,
         )
         if ssrc is None:
-            logger.warning(
-                f"focus_on: {freq_hz/1e6:.3f} MHz is not in the monitored set"
-            )
             return False
         try:
             self.control.set_frequency(ssrc, freq_hz)
-            logger.info(
-                f"Front end focused on {freq_hz/1e6:.3f} MHz "
-                f"(SSRC {ssrc:08x}); other stations leave the window"
-            )
             return True
         except Exception as e:
             logger.warning(f"focus_on {freq_hz/1e6:.3f} MHz failed: {e}")
             return False
+
+    def _drop_anchor(self, keep: Optional[int] = None):
+        """Remove the previous anchor channel, if any."""
+        ssrc = self._anchor_ssrc
+        if ssrc is None or ssrc == keep:
+            return
+        self._anchor_ssrc = None
+        try:
+            self.control.remove_channel(ssrc)
+        except Exception:
+            pass
 
     def _reassert_focus(self):
         """Re-aim the front end after channel churn has moved it."""
@@ -266,6 +359,7 @@ class RadioController:
     def clear_focus(self):
         """Stop holding the front end on a station (last listener left)."""
         self.focused_freq_hz = None
+        self._drop_anchor()
 
     def apply_stations(
         self,
@@ -375,6 +469,11 @@ class RadioController:
         # own schedule while we get on with creating the new ones.
         for ssrc, ch in ours.items():
             if ssrc in desired:
+                continue
+            if ssrc == self._anchor_ssrc:
+                # The anchor holds the front end on whatever the listener
+                # chose. It is deliberately not a station, so the diff would
+                # otherwise delete it on every search and un-centre the window.
                 continue
             try:
                 self.control.remove_channel(ssrc)
