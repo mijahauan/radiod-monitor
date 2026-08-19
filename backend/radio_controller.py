@@ -156,6 +156,40 @@ class RadioController:
                     pass
         return self.usable_bw_hz
 
+    def read_window(self):
+        """Measure where the front end currently sits, in absolute Hz.
+
+        Returns (low_hz, high_hz) or None. Measured rather than derived from
+        what this app believes it set: radiod re-places the front end on its
+        own terms, and the anchor mechanism in focus_on() exists precisely
+        because the obvious model of its placement was wrong.
+
+        Picks an SSRC to poll: the anchor channel if one is focused (present
+        whenever a listener holds focus, which is precisely when the window
+        matters -- and the only channel that exists at all in directory
+        mode), otherwise any active channel.
+        """
+        if not self.control:
+            return None
+        if self._anchor_ssrc is not None:
+            ssrc = self._anchor_ssrc
+        elif self.active_channels:
+            ssrc = next(iter(self.active_channels))
+        else:
+            return None
+        if self.fe_low_edge_hz is None or self.fe_high_edge_hz is None:
+            return None
+        try:
+            status = self.control.poll_status(ssrc, timeout=2.0)
+        except Exception as e:
+            logger.debug(f"read_window: {e}")
+            return None
+        fe = getattr(status, "frontend", None) or status
+        first_lo = getattr(fe, "first_lo", None)
+        if not first_lo:
+            return None
+        return (first_lo + self.fe_low_edge_hz, first_lo + self.fe_high_edge_hz)
+
     # Threshold used to hold a squelch open that radiod will not let us
     # switch off. Low enough that any demodulated signal clears it.
     SQUELCH_WIDE_OPEN_DB = -20.0

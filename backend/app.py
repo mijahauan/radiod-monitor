@@ -62,33 +62,54 @@ async def activity_monitor():
     """Poll radiod for per-channel SNR and broadcast to control WebSockets."""
     while True:
         await asyncio.sleep(ACTIVITY_POLL_INTERVAL)
-        if not controller.active_channels or not active_websockets:
+        if not active_websockets:
             continue
         try:
-            channels = await asyncio.to_thread(
-                discover_channels, controller.radiod_host, 1.0
-            )
-            for ssrc, freq_hz in list(controller.active_channels.items()):
-                ch = channels.get(ssrc)
-                if ch is None:
-                    ch = next(
-                        (c for c in channels.values()
-                         if abs(c.frequency - freq_hz) < 100.0),
-                        None,
-                    )
-                raw_snr = ch.snr if ch is not None else None
-                if raw_snr is not None and (math.isinf(raw_snr) or math.isnan(raw_snr)):
-                    raw_snr = None
-                is_active = raw_snr is not None and raw_snr > SNR_ACTIVE_THRESHOLD
-                msg = {
-                    "type": "activity",
-                    "freq": freq_hz,
-                    "isActive": is_active,
-                    "snr": round(raw_snr, 1) if raw_snr is not None else None,
+            if controller.active_channels:
+                channels = await asyncio.to_thread(
+                    discover_channels, controller.radiod_host, 1.0
+                )
+                for ssrc, freq_hz in list(controller.active_channels.items()):
+                    ch = channels.get(ssrc)
+                    if ch is None:
+                        ch = next(
+                            (c for c in channels.values()
+                             if abs(c.frequency - freq_hz) < 100.0),
+                            None,
+                        )
+                    raw_snr = ch.snr if ch is not None else None
+                    if raw_snr is not None and (math.isinf(raw_snr) or math.isnan(raw_snr)):
+                        raw_snr = None
+                    is_active = raw_snr is not None and raw_snr > SNR_ACTIVE_THRESHOLD
+                    msg = {
+                        "type": "activity",
+                        "freq": freq_hz,
+                        "isActive": is_active,
+                        "snr": round(raw_snr, 1) if raw_snr is not None else None,
+                    }
+                    for ws in list(active_websockets):
+                        try:
+                            await ws.send_json(msg)
+                        except Exception:
+                            pass
+
+            # The window read/broadcast runs every cycle regardless of
+            # whether any channels exist: read_window() can resolve an SSRC
+            # from the anchor channel alone, which is precisely the case
+            # (directory mode) where active_channels is empty but the
+            # frequency strip most needs the window position.
+            window = await asyncio.to_thread(controller.read_window)
+            if window:
+                low_hz, high_hz = window
+                wmsg = {
+                    "type": "window",
+                    "low_hz": low_hz,
+                    "high_hz": high_hz,
+                    "center_hz": (low_hz + high_hz) / 2.0,
                 }
                 for ws in list(active_websockets):
                     try:
-                        await ws.send_json(msg)
+                        await ws.send_json(wmsg)
                     except Exception:
                         pass
         except asyncio.CancelledError:
@@ -250,6 +271,11 @@ async def _handle_search(websocket: WebSocket, data: Dict[str, Any]):
 
     stations = source.list_stations(lat, lon, radius_km, params)
 
+    # Whether the activity map can mean anything for this set. Computed here
+    # rather than read back from apply_stations because results are sent
+    # first: the converge task runs in the background.
+    activity_available = controller.fits_window(s.freq_hz for s in stations)
+
     await websocket.send_json({
         "type": "results",
         "mode": mode,
@@ -258,6 +284,7 @@ async def _handle_search(websocket: WebSocket, data: Dict[str, Any]):
         "lat": lat,
         "lon": lon,
         "stations": [s.to_dict() for s in stations],
+        "activity": activity_available,
     })
 
     # ensure_channel is blocking; fire-and-forget off the event loop.
