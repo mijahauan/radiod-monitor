@@ -12,6 +12,7 @@ reachable from AudioStreamer with the same arguments.
 Per-user settings (squelch) are applied after channel creation so they
 don't perturb the SSRC hash.
 """
+import asyncio
 import logging
 import threading
 from typing import Iterable, List, Optional
@@ -27,6 +28,13 @@ from ka9q.types import Encoding
 from .sources.base import Station
 
 logger = logging.getLogger(__name__)
+
+# Frequency for the one throwaway channel probe_frontend() needs: radiod
+# reports the front-end limits alongside per-channel status, so there has to
+# be a channel to ask about. Any frequency the receiver can reach will do --
+# the limits are a property of the front end, not of the channel -- and this
+# one is in range of every radiod this app talks to.
+PROBE_FREQ_HZ = 10_000_000.0
 
 
 class RadioController:
@@ -62,6 +70,11 @@ class RadioController:
         # set the audio plane validates against -- not active_channels, which
         # fills in gradually while channels are still being created.
         self.monitored_freqs: set = set()
+        # Usable IF window of the connected receiver, in Hz, as radiod
+        # reports it. Sources size their band segments to this. None until
+        # probed; re-probed on every host change because the answer is a
+        # property of the radio, not of this app.
+        self.usable_bw_hz: Optional[float] = None
         self._apply_lock = threading.Lock()
 
     async def connect(self):
@@ -71,6 +84,64 @@ class RadioController:
         except Exception as e:
             logger.error(f"Failed to connect to radiod: {e}")
             raise
+        self.usable_bw_hz = None
+        await asyncio.to_thread(self.probe_frontend)
+
+    def probe_frontend(self) -> Optional[float]:
+        """Ask radiod how much spectrum this receiver covers at once.
+
+        radiod reports the front end's usable IF limits as FE_LOW_EDGE and
+        FE_HIGH_EDGE -- the same Frontend.min_IF/max_IF that set_freq() tests
+        a channel against before deciding to retune. Their span is the real
+        answer: 660 kHz on this Airspy HF+ at 768 kHz sample rate, i.e. well
+        under the raw rate, because radiod has already discounted filter
+        rolloff. Deriving it from samprate would overstate it.
+
+        Costs one throwaway channel: the limits ride along with per-channel
+        status, so there has to be a channel to ask about. It is created at
+        the frequency the front end is already on -- so radiod has no reason
+        to retune anything -- and removed immediately.
+        """
+        if not self.control:
+            return None
+        probe_ssrc = None
+        try:
+            probe = self.control.ensure_channel(
+                frequency_hz=PROBE_FREQ_HZ,
+                preset="am",
+                sample_rate=self.sample_rate,
+                gain=0.0,
+                destination=self.destination,
+                encoding=Encoding.OPUS,
+                timeout=5.0,
+            )
+            probe_ssrc = probe.ssrc
+            status = self.control.poll_status(probe_ssrc, timeout=3.0)
+            fe = getattr(status, "frontend", None) or status
+            low = getattr(fe, "fe_low_edge", None)
+            high = getattr(fe, "fe_high_edge", None)
+            if low is not None and high is not None and high > low:
+                self.usable_bw_hz = float(high - low)
+                logger.info(
+                    f"{getattr(fe, 'description', self.radiod_host)}: usable "
+                    f"window {self.usable_bw_hz/1e3:.1f} kHz "
+                    f"({low/1e3:+.1f}..{high/1e3:+.1f} kHz), "
+                    f"input rate {getattr(fe, 'input_samprate', '?')} Hz"
+                )
+            else:
+                logger.warning(
+                    "radiod did not report FE_LOW_EDGE/FE_HIGH_EDGE; band "
+                    "segments will fall back to a default width"
+                )
+        except Exception as e:
+            logger.warning(f"Could not probe the front end: {e}")
+        finally:
+            if probe_ssrc is not None:
+                try:
+                    self.control.remove_channel(probe_ssrc)
+                except Exception:
+                    pass
+        return self.usable_bw_hz
 
     def _squelch_args(self) -> dict:
         """

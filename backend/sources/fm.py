@@ -6,16 +6,19 @@ see scripts/fetch_fm_stations.py to refresh) from
 data/fm_stations.json and filters by great-circle distance and a
 user-selected band segment.
 
-Uses radiod's "wfm" preset, which per ka9q-radio/share/presets.conf is
-wideband FM demodulation with 75 µs North American de-emphasis and
-output forced to 48 kHz **stereo** — hence audio_channels = 2.
+Uses radiod's "wfm" preset: wideband FM with 75 µs North American
+de-emphasis, output forced to 48 kHz. Note the shipped preset sets
+`mono = yes`, so audio_channels is only a hint — the browser's decoder is
+configured from the first Opus frame (see Source.audio_channels).
 
-The US FM broadcast band is 88.0 – 108.0 MHz (20 MHz wide). Most
-popular SDR front ends (Airspy R2: ~10 MHz, RTL-SDR: ~2.4 MHz) can't
-cover the whole band at once, so the source exposes configurable
-5 MHz band segments. If you're on a wider-bandwidth SDR you can select
-any segment without retuning; on a narrower one you'll pick the band
-you want to scan.
+The US FM broadcast band is 88.0 – 108.0 MHz, wider than most front ends
+can cover at once, so it is split into segments. The split is computed
+from the connected receiver's usable window rather than fixed, because
+the right answer differs per radio: a direct-sampling RX888 covers the
+whole band, an Airspy R2 at 10 Msps needs a few segments, and an Airspy
+HF+ at 768 kHz manages a few stations at a time. A segment wider than the
+window does not just show unreachable stations — it makes them unlistenable,
+since radiod can only place the front end over one window at a time.
 
 data/fm_stations.json schema (flat list):
     {
@@ -35,7 +38,7 @@ import os
 from typing import Any, Dict, List, Tuple
 
 from ..geo import haversine_km
-from .base import Source, Station
+from .base import Source, Station, segment_band
 
 logger = logging.getLogger(__name__)
 
@@ -43,23 +46,34 @@ _DATA_DIR = os.path.normpath(
     os.path.join(os.path.dirname(__file__), "..", "..", "data")
 )
 
-# Tuple form: (low_mhz, high_mhz). 5 MHz chunks so an Airspy R2 can
-# cover any one segment in one front-end tune.
-_BAND_SEGMENTS: Dict[str, Tuple[float, float]] = {
-    "fm_1": (88.0, 93.0),
-    "fm_2": (93.0, 98.0),
-    "fm_3": (98.0, 103.0),
-    "fm_4": (103.0, 108.0),
-}
+# The US FM broadcast band. Segments are not fixed: they are cut from this
+# range to fit whatever the connected receiver can cover in one front-end
+# window (see base.segment_band). A direct-sampling RX888 takes the whole
+# band in one; an Airspy R2 needs a few; an Airspy HF+ at 768 kHz gets a
+# handful of stations at a time.
+_BAND_LOW_MHZ = 88.0
+_BAND_HIGH_MHZ = 108.0
+_KEY_PREFIX = "fm"
 
-_BAND_LABELS = {
-    "fm_1": "88.0 – 93.0 MHz",
-    "fm_2": "93.0 – 98.0 MHz",
-    "fm_3": "98.0 – 103.0 MHz",
-    "fm_4": "103.0 – 108.0 MHz",
-}
 
-_DEFAULT_BAND = "fm_2"  # 93–98 MHz: includes the most populated slots
+def _segments(usable_bw_hz):
+    return segment_band(_BAND_LOW_MHZ, _BAND_HIGH_MHZ, usable_bw_hz, _KEY_PREFIX)
+
+
+def _segment_for(band, usable_bw_hz):
+    """Resolve a band key to (low_mhz, high_mhz), tolerating a stale key.
+
+    The key encodes a division of the band that depends on the receiver, so
+    one saved by the browser -- or chosen before a host switch -- may no
+    longer exist. Falling back to the middle segment keeps a search working
+    instead of failing on a key the UI had every reason to believe in.
+    """
+    segs = _segments(usable_bw_hz)
+    for key, low, high, _ in segs:
+        if key == band:
+            return low, high
+    key, low, high, _ = segs[len(segs) // 2]
+    return low, high
 
 
 class FmSource(Source):
@@ -100,22 +114,20 @@ class FmSource(Source):
             self._cache = []
         return self._cache
 
-    def controls_schema(self) -> Dict[str, Any]:
+    def controls_schema(self, usable_bw_hz=None) -> Dict[str, Any]:
+        segs = _segments(usable_bw_hz)
         return {
             "bandSegments": [
-                {
-                    "value": key,
-                    "label": _BAND_LABELS[key],
-                    "center_mhz": (low + high) / 2.0,
-                }
-                for key, (low, high) in _BAND_SEGMENTS.items()
+                {"value": key, "label": label, "center_mhz": (low + high) / 2.0}
+                for key, low, high, label in segs
             ],
-            "defaultBand": _DEFAULT_BAND,
+            # Middle of the band: the most populated part of the dial, and
+            # a sane landing spot whatever the segment width turned out to be.
+            "defaultBand": segs[len(segs) // 2][0],
         }
 
     def center_freq_hz(self, params: Dict[str, Any]) -> float:
-        band = params.get("band", _DEFAULT_BAND)
-        low, high = _BAND_SEGMENTS.get(band, _BAND_SEGMENTS[_DEFAULT_BAND])
+        low, high = _segment_for(params.get("band"), params.get("usable_bw_hz"))
         return ((low + high) / 2.0) * 1e6
 
     def list_stations(
@@ -125,8 +137,7 @@ class FmSource(Source):
         radius_km: float,
         params: Dict[str, Any],
     ) -> List[Station]:
-        band = params.get("band", _DEFAULT_BAND)
-        low, high = _BAND_SEGMENTS.get(band, _BAND_SEGMENTS[_DEFAULT_BAND])
+        low, high = _segment_for(params.get("band"), params.get("usable_bw_hz"))
         low_hz, high_hz = low * 1e6, high * 1e6
 
         results: List[Station] = []

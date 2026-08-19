@@ -63,8 +63,10 @@ class NwsSource(Source):
             self._cache = []
         return self._cache
 
-    def controls_schema(self) -> Dict[str, Any]:
-        # No per-source controls — NWS is a single fixed band.
+    def controls_schema(self, usable_bw_hz=None) -> Dict[str, Any]:
+        # No per-source controls. The seven NWR channels span 162.400 to
+        # 162.550 MHz -- 150 kHz -- which fits inside the window of every
+        # receiver this app supports, so there is nothing to segment.
         return {}
 
     def center_freq_hz(self, params: Dict[str, Any]) -> float:

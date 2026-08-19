@@ -192,7 +192,9 @@ async def sources():
                 "display_name": s.display_name,
                 "preset": s.preset,
                 "audio_channels": s.audio_channels,
-                "controls": s.controls_schema(),
+                # Segments depend on the connected radio's window, so the
+                # schema is built per request rather than cached.
+                "controls": s.controls_schema(controller.usable_bw_hz),
             }
             for s in source_registry.all_sources().values()
         ],
@@ -235,6 +237,10 @@ async def _handle_search(websocket: WebSocket, data: Dict[str, Any]):
     radius_km = float(data.get("radius", 100.0))
     squelch_db = float(data.get("squelch", 10.0))
     params = data.get("params", {}) or {}
+    # Sources size their band segments to the receiver, so they need to know
+    # what it can cover. Injected here rather than passed as another argument
+    # so the Source signature stays as it is.
+    params = dict(params, usable_bw_hz=controller.usable_bw_hz)
 
     lat, lon = parse_location(loc)
     if lat is None or lon is None:

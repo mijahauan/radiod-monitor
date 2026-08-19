@@ -98,8 +98,8 @@ This is the unified successor to the sibling projects `../nws-monitor` and `../r
 Registry lives in [backend/sources/__init__.py](backend/sources/__init__.py); adding a new source is one import + one entry in `_SOURCES`. Three sources ship:
 
 - **`NwsSource`** ([backend/sources/nws.py](backend/sources/nws.py)) — loads `data/nws_stations.json`, 7-channel NWR band centered on 162.475 MHz, no per-source controls, preset `nfm`. Falls back to the 7 standard frequencies at the user's exact location if no station is within range, so the audio pipeline is still exercisable.
-- **`RepeaterSource`** ([backend/sources/repeaters.py](backend/sources/repeaters.py)) — loads `data/repeaters*.kml` (RepeaterBook export, newest mtime wins), filters by distance and band segment, center frequency = midpoint of the selected segment, preset `nfm`. Parses callsign, downlink frequency, offset sign, and PL tone from the KML description CDATA. Warns at load time if the KML is >180 days old.
-- **`FmSource`** ([backend/sources/fm.py](backend/sources/fm.py)) — loads `data/fm_stations.json` (compiled by [scripts/fetch_fm_stations.py](scripts/fetch_fm_stations.py) from the FCC CDBS public files), filters by distance and 5 MHz band segment (88–93, 93–98, 98–103, 103–108 MHz), preset `wfm`, `audio_channels=2`. The `wfm` preset in [ka9q-radio/share/presets.conf](../ka9q-radio/share/presets.conf) forces a 384 kHz downconverter and 48 kHz output with 75 µs North American de-emphasis. **It does not force stereo** — both the repo copy and the installed `/usr/local/share/ka9q-radio/presets.conf` set `mono = yes`, which is why `audio_channels` is only a hint and the real count comes off the wire (see below).
+- **`RepeaterSource`** ([backend/sources/repeaters.py](backend/sources/repeaters.py)) — loads `data/repeaters*.kml` (RepeaterBook export, newest mtime wins), filters by distance and by a receiver-sized band segment, preset `nfm`. Parses callsign, downlink frequency, offset sign, and PL tone from the KML description CDATA. Warns at load time if the KML is >180 days old.
+- **`FmSource`** ([backend/sources/fm.py](backend/sources/fm.py)) — loads `data/fm_stations.json` (compiled by [scripts/fetch_fm_stations.py](scripts/fetch_fm_stations.py) from the FCC CDBS public files), filters by distance and by a band segment cut to the connected receiver's window (see below), preset `wfm`, `audio_channels=2`. The `wfm` preset in [ka9q-radio/share/presets.conf](../ka9q-radio/share/presets.conf) forces a 384 kHz downconverter and 48 kHz output with 75 µs North American de-emphasis. **It does not force stereo** — both the repo copy and the installed `/usr/local/share/ka9q-radio/presets.conf` set `mono = yes`, which is why `audio_channels` is only a hint and the real count comes off the wire (see below).
 
 **About the `audio_channels` attribute.** Declared on `Source` and reported in `GET /api/sources` and each `{type: "results"}` message, it is a *hint* only — it seeds `AudioSession` before any audio arrives.
 
@@ -107,11 +107,62 @@ It is not what configures the decoder, because a source cannot know the answer: 
 
 The authority is the stream itself. Every Opus packet states its channel count in bit 2 of its TOC byte (RFC 6716 §3.1); `audio_streamer.opus_channels()` reads it from the first frame, and the audio WebSocket sends `{"type": "config", "channels": N}` as a text message ahead of any binary frame. The browser configures `AudioDecoder` on that message and ignores frames until it arrives (Opus frames are self-contained, so the few dropped cost a few ms). A listener joining a stream already in progress is handed the stored value on connect.
 
+### Band segments are a property of the radio, not the source
+
+A `Source` that spans more spectrum than the receiver can cover at once must
+cut it into segments sized to that receiver — `segment_band()` in
+[backend/sources/base.py](backend/sources/base.py), at `SEGMENT_FILL` (80%) of
+the usable window. Hardcoded segments are wrong on every radio but the one
+they were written for.
+
+**Where the number comes from.** radiod reports the front end's usable IF
+limits as `FE_LOW_EDGE`/`FE_HIGH_EDGE` — the same `Frontend.min_IF`/`max_IF`
+that `set_freq()` tests a channel against. `RadioController.probe_frontend()`
+reads them on connect (and on every host switch) into `usable_bw_hz`, which
+`app.py` passes to `controls_schema()` and injects into search `params`.
+Deriving the width from `input_samprate` instead would overstate it: this
+Airspy HF+ samples at 768 kHz but reports a 660.5 kHz window, radiod having
+already discounted filter rolloff. Measured widths: **660 kHz** (Airspy HF+ @
+768k), **~8.6 MHz** (Airspy R2 @ 10 Msps), the whole HF spectrum on a
+direct-sampling RX888 (`isreal=True`).
+
+The probe costs one throwaway channel — the limits ride along with
+*per-channel* status, so there has to be a channel to ask about.
+
+**Why it matters more than it looks.** radiod is frequency-first: `set_freq()`
+accepts the channel frequency, then retunes the front end *only* if the
+resulting IF falls outside the window, and then "as little as possible"
+(`radio.c`). One window, shared by every channel. So a segment wider than the
+window does not merely show unreachable stations — it makes them
+*unlistenable*, and the channels inside it fight each other, each creation
+dragging the window off the last. Sizing segments to the window is what makes
+the activity map mean anything: every station shown is simultaneously
+receivable, and radiod never has to retune at all.
+
+Segment keys (`fm_3`, `2m_5`) therefore encode a division that depends on the
+connected radio. A key saved by the browser or chosen before a host switch may
+not exist afterwards, so `_segment_for()` in each source falls back to a sane
+segment rather than failing the search.
+
+**Focus is the fallback, not the mechanism.** `RadioController.focus_on()`
+aims the window at one station by re-asserting its frequency
+(`radio_status.c` documents `set_freq` on an unchanged frequency as the way to
+"possibly reassert front end tuner control"). It is sticky — re-applied after
+`apply_stations`, since every channel created moves the window — and it is
+what rescues a selection outside the current window. `set_first_lo()` does
+**not** work for this: radiod overrides it (measured identical `first_lo` with
+no LO command, with the right one, and with a deliberately wrong one), which
+is why `tune_center()` is now advisory only.
+
+**Other clients compete.** The front end is global to the radiod instance.
+`ka9q-web` against the same radiod requests its own window and drags the
+front end away; it must not run alongside this app on one receiver.
+
 ### Shared pipeline
 
 Identical in shape to the aligned nws-monitor/repeater-monitor, just generalized:
 
-1. **Control plane — [backend/radio_controller.py](backend/radio_controller.py).** On a `search` message, the active `Source` produces a station list and a center frequency. `RadioController.tune_center()` re-tunes the receiver front end; `apply_stations()` converges the channel set. Channels live on a single stable multicast destination derived from `generate_multicast_ip("radiod-monitor")` — shared across all sources, so mode switching is a delta on the channel set rather than a teardown. SSRCs are deterministic (hash of frequency, preset, sample_rate, encoding, destination, agc, gain=0.0, and the radiod identity) so they survive server restarts and can be independently rediscovered by the audio streamer. Per-user squelch is applied *after* ensure_channel so it doesn't perturb the hash.
+1. **Control plane — [backend/radio_controller.py](backend/radio_controller.py).** On a `search` message, the active `Source` produces a station list and a center frequency. `apply_stations()` converges the channel set. (`tune_center()` no longer tunes anything — radiod owns front-end placement; see the band-segment section above.) Channels live on a single stable multicast destination derived from `generate_multicast_ip("radiod-monitor")` — shared across all sources, so mode switching is a delta on the channel set rather than a teardown. SSRCs are deterministic (hash of frequency, preset, sample_rate, encoding, destination, agc, gain=0.0, and the radiod identity) so they survive server restarts and can be independently rediscovered by the audio streamer. Per-user squelch is applied *after* ensure_channel so it doesn't perturb the hash.
 
    **Convergence is a diff, and that is load-bearing.** Because the SSRC is a deterministic hash of exactly the parameters that define a channel, the wanted SSRC set is computable *before* talking to radiod — `allocate_ssrc()` with the same arguments `ensure_channel()` uses internally, including `radiod_host=control.status_address`. An existing channel on our destination whose SSRC is in that set is correct by construction, so it is left untouched; only SSRCs outside the set are removed, and only missing ones are created.
 
@@ -181,8 +232,11 @@ Measured, same channel, same moment, before the upgrade:
 | `INADDR_ANY`        | 0             |
 
 Hardware note: `radiod@airspy-generic` (the wideband Airspy R2) crash-loops with
-`AIRSPY_ERROR_NOT_FOUND` — only the Airspy HF+ is on USB. The HF+ has 768 kHz of
-front-end bandwidth, so `FmSource`'s 5 MHz band segments and the `wfm` preset's
-384 kHz downconverter cannot work on it; VHF tunes but has no signal on an HF
-antenna. The audio pipeline is therefore exercisable end-to-end only on HF until
-the R2 is reconnected.
+`AIRSPY_ERROR_NOT_FOUND` — only the Airspy HF+ is on USB.
+
+The HF+ **does** tune VHF: measured clean tuning at 146 MHz and 36 dB SNR at
+162 MHz (NWR audio plays). What it cannot do is cover much at once — a 660.5 kHz
+window — which is why band segments are now cut to the radio rather than fixed.
+Broadcast FM is the exception that stays out of reach: the `wfm` preset needs a
+384 kHz downconverter, and with no FM signal on an HF antenna those channels sit
+at `snr=-inf` regardless of segmentation.
