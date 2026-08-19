@@ -237,6 +237,15 @@ Hardware note: `radiod@airspy-generic` (the wideband Airspy R2) crash-loops with
 The HF+ **does** tune VHF: measured clean tuning at 146 MHz and 36 dB SNR at
 162 MHz (NWR audio plays). What it cannot do is cover much at once — a 660.5 kHz
 window — which is why band segments are now cut to the radio rather than fixed.
-Broadcast FM is the exception that stays out of reach: the `wfm` preset needs a
-384 kHz downconverter, and with no FM signal on an HF antenna those channels sit
-at `snr=-inf` regardless of segmentation.
+Broadcast FM fits this radio fine — that was an earlier misdiagnosis. Measured
+at 91.3 MHz, radiod places the window at `first_lo ± 330.2 kHz` and puts the
+channel at IF +219.2 kHz, exactly `max_IF - filter.max_IF - fudge`, so the whole
+±110 kHz wfm filter lands inside. The 384 kHz composite path fits the 768 kHz
+input too. A wfm channel there has produced decodable audio.
+
+What is missing is a carrier: an HF antenna gives no real FM broadcast signal,
+`am` reads only noise-level energy in the FM band, and the wfm demod reports
+`snr=-inf`. Note `wfm.c` sets `chan->squelch.snr_enable = true` unconditionally,
+so `Source.snr_squelch = False` is **inert for wfm** — radiod re-enables it, and
+no threshold opens a squelch whose SNR is `-inf`. FM needs a VHF antenna, not a
+different receiver.

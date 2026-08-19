@@ -86,9 +86,12 @@ class FmSource(Source):
     # where it does not.
     audio_channels = 2
     sample_rate = 48000  # wfm output is always 48 kHz (forced by demod)
-    # ka9q-radio's wfm demod does not publish a valid SNR (always -inf),
-    # so SNR-based squelch would clamp the channel shut and no RTP packets
-    # would ever flow. Broadcast FM doesn't need squelch anyway.
+    # Declared for consistency, but understand that radiod ignores it here:
+    # wfm.c sets chan->squelch.snr_enable = true unconditionally when the
+    # demod starts, so the channel is SNR-squelched no matter what we send,
+    # and no threshold opens it while the demod reports snr=-inf (which is
+    # what it reports with no FM carrier present). A wfm channel with a real
+    # signal opens on its own; one without stays shut whatever we ask for.
     snr_squelch = False
 
     def __init__(self):
