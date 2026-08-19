@@ -14,10 +14,14 @@ don't perturb the SSRC hash.
 """
 import logging
 import threading
-import time
 from typing import Iterable, List, Optional
 
-from ka9q import RadiodControl, discover_channels, generate_multicast_ip
+from ka9q import (
+    RadiodControl,
+    allocate_ssrc,
+    discover_channels,
+    generate_multicast_ip,
+)
 from ka9q.types import Encoding
 
 from .sources.base import Station
@@ -142,11 +146,40 @@ class RadioController:
             f"dest={self.destination}"
         )
 
-        # Remove ALL existing channels on our destination before creating the
-        # new set.  radiod removes a channel when its frequency is set to 0,
-        # but the removal is asynchronous (next polling cycle).  Zeroing
-        # everything first guarantees a clean slate — no ghosts from prior
-        # band segments, stale sessions, or encoding mismatches.
+        # Converge by *diffing*, not by wiping and rebuilding.
+        #
+        # The SSRC is a deterministic hash of exactly the parameters that
+        # define a channel (frequency, preset, sample_rate, encoding,
+        # destination, agc, gain, radiod identity), so the SSRC set we want is
+        # computable before talking to radiod at all.  An existing channel
+        # whose SSRC is in that set is correct *by construction* — there is
+        # nothing to reconcile, so it is left completely alone.
+        #
+        # This is what makes the old blocking wait unnecessary.  Wiping
+        # everything first meant immediately re-creating SSRCs that were still
+        # being torn down, and radiod's removal is asynchronous — so the code
+        # had to poll for up to 10 s for freq=0 zombies to disappear before it
+        # dared re-create them, on every single search.  Here the removed set
+        # and the created set are disjoint by definition: an SSRC we keep is
+        # never removed, and an SSRC we remove is never re-created in the same
+        # pass.  Nothing has to be waited on.
+        #
+        # It also stops a search from cutting off audio the user is listening
+        # to: re-searching the same mode now preserves that station's channel
+        # instead of destroying and rebuilding it.
+        desired: dict = {}   # ssrc -> freq_hz
+        for freq_hz in new_freqs:
+            desired[allocate_ssrc(
+                frequency_hz=freq_hz,
+                preset=preset,
+                sample_rate=self.sample_rate,
+                agc=False,           # matches ensure_channel's agc_enable=0
+                gain=0.0,
+                destination=self.destination,
+                encoding=Encoding.OPUS,
+                radiod_host=self.control.status_address,
+            )] = freq_hz
+
         try:
             existing = discover_channels(self.radiod_host, 1.0)
         except Exception as e:
@@ -154,46 +187,60 @@ class RadioController:
             existing = {}
 
         dest_ip = self.destination.split(":")[0]
-        removed = 0
-        for ssrc, ch in existing.items():
-            if dest_ip not in (ch.multicast_address or ""):
-                continue  # not on our destination
+        ours = {
+            ssrc: ch for ssrc, ch in existing.items()
+            if dest_ip in (ch.multicast_address or "")
+        }
+
+        # Remove only what is genuinely stale — channels on our destination
+        # that the new station set does not want.  Fire-and-forget: we never
+        # re-create these SSRCs in this pass, so radiod can purge them on its
+        # own schedule while we get on with creating the new ones.
+        for ssrc, ch in ours.items():
+            if ssrc in desired:
+                continue
             try:
                 self.control.remove_channel(ssrc)
-                removed += 1
                 logger.info(
-                    f"Removed channel SSRC {ssrc:08x} "
+                    f"Removed stale channel SSRC {ssrc:08x} "
                     f"({ch.frequency/1e6:.3f} MHz)"
                 )
             except Exception as e:
                 logger.warning(f"Failed to remove SSRC {ssrc:08x}: {e}")
+
         self.active_channels.clear()
 
-        # Poll until radiod has actually purged all freq=0 zombies on our
-        # destination.  radiod removes channels asynchronously on its next
-        # polling cycle, so we must wait for that to complete.
-        if removed:
-            deadline = time.time() + 10.0
-            while time.time() < deadline:
-                time.sleep(0.5)
-                try:
-                    still = discover_channels(self.radiod_host, 1.0)
-                except Exception:
-                    break
-                zombies = [
-                    s for s, c in still.items()
-                    if dest_ip in (c.multicast_address or "")
-                    and c.frequency == 0
-                ]
-                if not zombies:
-                    logger.info("All zombie channels purged by radiod")
-                    break
-                logger.debug(f"Waiting for {len(zombies)} zombie channels to be purged")
-            else:
-                logger.warning("Timed out waiting for radiod to purge zombie channels")
+        # Keep the channels that are already right, and skip their round trips.
+        # A channel counts as already right when radiod is serving it at the
+        # expected frequency AND on OPUS — the frequency guards against a
+        # zombie mid-teardown reusing the SSRC, and the encoding against the
+        # preset default having been reasserted underneath us.  Both fields
+        # come from the discovery we already did, so this costs nothing.
+        reused = 0
+        for ssrc, freq_hz in list(desired.items()):
+            ch = ours.get(ssrc)
+            if ch is None:
+                continue
+            if abs((ch.frequency or 0.0) - freq_hz) > 1.0:
+                continue
+            if ch.encoding != Encoding.OPUS:
+                continue
+            self.active_channels[ssrc] = freq_hz
+            desired.pop(ssrc)
+            reused += 1
+            try:
+                self.control.set_squelch(ssrc, **self._squelch_args())
+            except Exception as sq_err:
+                logger.warning(f"Failed to set squelch on SSRC {ssrc:08x}: {sq_err}")
 
-        # Ensure a channel exists for every requested frequency
-        for freq_hz in new_freqs:
+        if reused:
+            logger.info(
+                f"Reused {reused} existing channel(s); "
+                f"creating {len(desired)}"
+            )
+
+        # Create only the frequencies that are actually missing
+        for freq_hz in desired.values():
             try:
                 channel = self.control.ensure_channel(
                     frequency_hz=freq_hz,

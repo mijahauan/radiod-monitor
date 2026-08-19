@@ -120,11 +120,27 @@ purge zombie channels" warning fires in practice — before recreating nine
 channels. Clicking Listen right after a search therefore waits on a teardown
 that just destroyed the channel it is about to recreate.
 
-This predates the audio fix and is a design question, not a bug: the shared
-multicast destination is what makes mode-switching a cheap delta, but it also
-means one source's search tears down another's channels. Worth revisiting —
-either diff against the existing set instead of removing everything, or scope
-the destination per source.
+**Fixed** by converging with a diff instead of a wipe-and-rebuild. The SSRC is
+a deterministic hash of the parameters that define a channel, so the wanted
+SSRC set is computable before talking to radiod (`allocate_ssrc`, verified to
+produce byte-identical values to `ensure_channel`). A channel whose SSRC is in
+that set is correct by construction and is left untouched.
+
+That is what makes the blocking wait unnecessary rather than merely shorter:
+removals and creations are now disjoint by definition, so there is no
+remove-then-immediately-recreate race for radiod's asynchronous teardown to
+lose. The removals became fire-and-forget and the 10 s purge poll is gone.
+
+Measured, time-to-first-audio on a frequency in the station set:
+
+| | before | after |
+|---|---|---|
+| cold (channels must be created) | 3.66 s | 1.15 s |
+| repeat search (channels reused) | 7.09 s, 12.64 s | 0.07 s, 0.05 s |
+
+300+ frames per run, zero decode errors throughout; logs confirm the reuse
+path ("Reused 6 existing channel(s); creating 0") and zero zombie waits.
+A search no longer cuts off audio the user is listening to.
 
 Two things I changed in this area while chasing it:
 
