@@ -232,14 +232,21 @@ class Vfo:
                     return result
                 if self._stream is None:
                     await self._start_stream()
-                # Let the previous station's in-flight RTP drain before any
-                # frame counts as evidence. Zeroing the counter the instant
-                # _tune_once returns is not enough: radiod has already put
-                # those 20 ms packets on the wire, and they keep arriving for
-                # tens of milliseconds afterwards. Measured before this: a
-                # mode switch from 162.400 nfm to 91.300 wfm reported its
-                # first frame at 0.00 s -- the sound of the station being left
-                # -- then delivered 11 frames in 8 s.
+                # Discard the previous station's in-flight RTP before counting
+                # anything. radiod keeps demodulating across a frequency
+                # change -- there is no stop in the tune path, and ka9q-web
+                # does not use one either (control_set_mode sends PRESET alone
+                # on a live channel) -- so packets already sent for the old
+                # station keep arriving for tens of milliseconds.
+                #
+                # Tearing down and re-creating the RTP receiver per tune was
+                # tried instead, as the definitive version of this. It is
+                # worse: measured, 162.400 MHz went from tuning in 0.36 s
+                # every time to producing no frames at all, the multicast
+                # rejoin being slower and less reliable than the window this
+                # replaces. The listener never hears the discarded frames
+                # regardless -- the browser ignores audio until "tuned"
+                # configures its decoder, which happens after this.
                 await asyncio.sleep(self.flush_sec)
                 self._frames_seen = 0
                 await self._settle()
@@ -319,6 +326,31 @@ class Vfo:
           3. Nothing there -- create one and keep whatever SSRC the library
              allocates.
         """
+        # A preset change is a REPLACEMENT, not a retune. Changing a live
+        # channel's preset does not bring the new demodulator up: measured on
+        # a channel taken from nfm@162.400 to wfm@91.300 with the window
+        # correctly centred (IF +0.0 kHz), 0 frames in 25 s and no SNR at all,
+        # while a FRESH wfm channel on the same frequency delivered 501 frames
+        # in 10 s with snr 18.6 and its first frame in 0.20 s.
+        #
+        # This does not violate "retuned, never recreated". That rule exists
+        # because re-creating the SAME SSRC inside radiod's ~20 s purge hands
+        # back a corpse -- and `preset` is one of the inputs to the SSRC hash,
+        # so the replacement channel has a DIFFERENT SSRC by construction.
+        # The removed and created SSRCs are disjoint, exactly as they are in
+        # the sensor diff. A station change WITHIN a mode is still a retune.
+        if self.ssrc is not None and self.preset not in (None, preset):
+            logger.info(
+                f"Preset {self.preset} -> {preset}: replacing the VFO channel "
+                f"(a preset change in place does not start the demodulator)"
+            )
+            try:
+                self.control.remove_channel(self.ssrc)
+            except Exception as e:
+                logger.debug(f"replace: remove {self.ssrc}: {e}")
+            self.ssrc = None
+            self.preset = None
+
         if self.ssrc is not None:
             if self.control.poll_channel(self.ssrc, timeout=2.0) is not None:
                 return False
@@ -355,11 +387,24 @@ class Vfo:
             logger.info(f"Adopted existing channel SSRC {self.ssrc} as the VFO")
             return True
 
+        # radiod hands back a channel it is still reaping if the same
+        # deterministic SSRC was removed inside the last ~20 s. It answers
+        # status, but its frequency reads zero and it never emits RTP, so the
+        # symptom is a station that silently fails to play. Check for it here
+        # rather than letting the tune time out with no explanation.
         self.ssrc = self.control.create_channel(
             frequency_hz=freq_hz, preset=preset, sample_rate=sample_rate,
             gain=0.0, destination=self.destination, encoding=Encoding.OPUS,
         )
         self.preset = preset
+        born = self.control.poll_channel(self.ssrc, timeout=2.0)
+        if born is not None and (getattr(born, "frequency", None) or 0) == 0:
+            logger.warning(
+                f"radiod returned SSRC {self.ssrc} with frequency 0 -- it is "
+                f"still purging a channel with this SSRC, so it will not "
+                f"stream. Something removed the VFO's channel within the last "
+                f"~20 s; release_idle deliberately does not."
+            )
         logger.info(f"Created the VFO: SSRC {self.ssrc} on {self.destination}")
         return True
 

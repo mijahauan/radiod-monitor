@@ -198,19 +198,66 @@ def test_second_tune_does_not_create_a_channel(monkeypatch):
     assert not any(x[0] == "create_channel" for x in c.calls), (
         "the VFO is retuned, never recreated"
     )
-    assert v.started == 1, "and its stream follows the SSRC, so it is not restarted"
+    assert v.started == 1, (
+        "and its stream follows the SSRC, so it is not restarted -- tearing "
+        "the receiver down per tune was measured and made 162.400 MHz stop "
+        "producing frames entirely"
+    )
 
 
-def test_preset_is_sent_only_when_it_changes(monkeypatch):
+def test_a_preset_change_replaces_the_channel(monkeypatch):
+    """Changing a live channel's preset does not start the new demodulator.
+    Measured: nfm@162.400 taken to wfm@91.300 with the window correctly
+    centred gave 0 frames in 25 s, while a fresh wfm channel on the same
+    frequency gave 501 frames in 10 s. Safe because preset is an input to the
+    SSRC hash, so the replacement has a different SSRC and cannot collide with
+    the one radiod is purging."""
     monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
     c, v = make()
     asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
-    c.calls.clear()
-    asyncio.run(v.tune(91_300_000.0, "wfm", 48000))
-    assert not any(x[0] == "set_preset" for x in c.calls)
+    first = v.ssrc
     c.calls.clear()
     asyncio.run(v.tune(162_450_000.0, "nfm", 48000))
-    assert any(x[0] == "set_preset" for x in c.calls)
+    assert any(x[0] == "remove_channel" for x in c.calls), "old channel dropped"
+    assert any(x[0] == "create_channel" for x in c.calls), "new one created"
+    assert v.ssrc != first, "a different SSRC, so no purge race"
+
+
+def test_a_station_change_within_a_mode_is_still_a_retune(monkeypatch):
+    """The replacement above must not fire for an ordinary station change."""
+    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
+    c, v = make()
+    asyncio.run(v.tune(162_400_000.0, "nfm", 48000))
+    first = v.ssrc
+    c.calls.clear()
+    asyncio.run(v.tune(162_450_000.0, "nfm", 48000))
+    assert not any(x[0] == "remove_channel" for x in c.calls)
+    assert not any(x[0] == "create_channel" for x in c.calls)
+    assert v.ssrc == first
+    assert any(x[0] == "set_frequency" for x in c.calls)
+
+
+def test_no_preset_command_for_a_same_mode_retune(monkeypatch):
+    """Within one mode the channel is retuned and the preset never resent."""
+    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
+    c, v = make()
+    asyncio.run(v.tune(162_400_000.0, "nfm", 48000))
+    c.calls.clear()
+    asyncio.run(v.tune(162_450_000.0, "nfm", 48000))
+    assert not any(x[0] == "set_preset" for x in c.calls)
+
+
+def test_the_replacement_channel_is_created_with_the_new_preset(monkeypatch):
+    """A mode change carries its preset in create_channel, not in a follow-up
+    set_preset -- which is the command that was measured not to start the new
+    demodulator."""
+    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
+    c, v = make()
+    asyncio.run(v.tune(162_400_000.0, "nfm", 48000))
+    c.calls.clear()
+    asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
+    created = [x for x in c.calls if x[0] == "create_channel"]
+    assert len(created) == 1 and created[0][2] == "wfm"
 
 
 def test_tune_never_removes_the_vfo_channel(monkeypatch):
@@ -464,20 +511,25 @@ def test_the_window_is_centred_after_the_channel_exists(monkeypatch):
     assert names.index("create_channel") < names.index("centre_on")
 
 
-def test_frequency_is_set_before_the_preset_restarts_the_demod(monkeypatch):
-    """A preset command restarts the demodulator, and wfm.c re-runs set_freq
-    at demod start. Restart it first and radiod re-places the channel from the
-    PREVIOUS station's frequency, dragging the LO off what we just centred."""
+def test_the_retry_reissues_the_preset_after_the_frequency(monkeypatch):
+    """A preset command is now only used as the RETRY -- it restarts the
+    demodulator in place without destroying the channel. It must still come
+    after set_frequency, or wfm.c re-runs set_freq from the previous
+    station's frequency."""
     monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
-    c, v = make()
-    asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
-    c.calls.clear()
-    asyncio.run(v.tune(162_450_000.0, "nfm", 48000))   # preset changes
+    c = FakeControl()
+
+    class DeafVfo(FakeVfo):
+        async def _settle(self):
+            return          # no frames ever, so both attempts run
+
+    v = DeafVfo(control=c, window=FakeWindow(), destination="239.1.2.3",
+                anchor_destination="239.9.9.9", settle_sec=0.01, flush_sec=0.0)
+    result = asyncio.run(v.tune(162_400_000.0, "nfm", 48000))
+    assert result["type"] == "nosignal"
     names = [x[0] for x in c.calls]
-    assert "set_preset" in names, "a mode change must restart the demod"
-    assert names.index("set_frequency") < names.index("set_preset"), (
-        "restarting the demod on a stale frequency un-centres the window"
-    )
+    assert "set_preset" in names, "the retry restarts the demod in place"
+    assert names.index("set_frequency") < names.index("set_preset")
 
 
 def test_the_full_tune_order_is_create_frequency_preset_then_centre(monkeypatch):

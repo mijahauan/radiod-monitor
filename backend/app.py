@@ -357,15 +357,27 @@ async def _handle_search(websocket: WebSocket, data: Dict[str, Any]):
     })
 
     # ensure_channel is blocking; fire-and-forget off the event loop.
+    # Set once the previous mode's channels are gone. The audio path waits on
+    # this and not on the whole convergence: stale sensors block a tune, new
+    # ones do not.
+    removals_done = asyncio.Event()
+    controller.removals_done = removals_done
+    loop = asyncio.get_running_loop()
+
     async def _converge():
-        await asyncio.to_thread(
-            controller.apply_stations,
-            stations,
-            source.preset,
-            source.audio_channels,
-            source.snr_squelch,
-            source.sample_rate,
-        )
+        try:
+            await asyncio.to_thread(
+                controller.apply_stations,
+                stations,
+                source.preset,
+                source.audio_channels,
+                source.snr_squelch,
+                source.sample_rate,
+                lambda: loop.call_soon_threadsafe(removals_done.set),
+            )
+        finally:
+            # Never leave a tune waiting on an event that will not arrive.
+            loop.call_soon_threadsafe(removals_done.set)
         # A mode switch rebuilds the sensor set on a new band, and every
         # ensure_channel makes radiod re-place the front end. A listener tuned
         # to a station from the PREVIOUS search falls out of the window and
@@ -403,7 +415,7 @@ async def _handle_search(websocket: WebSocket, data: Dict[str, Any]):
             await asyncio.to_thread(controller.window.release,
                                     controller.control)
 
-    asyncio.create_task(_converge())
+    controller.converge_task = asyncio.create_task(_converge())
 
 
 # ---------------------------------------------------------------------------
@@ -457,6 +469,20 @@ async def websocket_audio(websocket: WebSocket):
                                    f"run a search first.",
                     })
                     continue
+                # Wait out any in-flight channel convergence. Tuning while
+                # the previous mode's sensor channels are still on the air
+                # leaves them pinning the front-end window where they are,
+                # and no anchor can move it far enough to reach the new
+                # station -- the "switched to Commercial FM and it didn't
+                # work" failure. Shielded so a slow converge cannot cancel it,
+                # bounded so a wedged one cannot hang the socket.
+                ev = getattr(controller, "removals_done", None)
+                if isinstance(ev, asyncio.Event) and not ev.is_set():
+                    try:
+                        await asyncio.wait_for(ev.wait(), timeout=10)
+                    except asyncio.TimeoutError:
+                        logger.warning("tune: stale channels still being "
+                                       "removed after 10 s; tuning anyway")
                 # tune() broadcasts "tuned"/"nosignal" to every listener
                 # queue itself (Vfo._broadcast_message); the return value is
                 # not re-sent here to avoid a duplicate decoder-reset marker

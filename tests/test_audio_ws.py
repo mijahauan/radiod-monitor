@@ -88,6 +88,7 @@ class FakeController:
         self.preset = "nfm"
         self.sample_rate = 48000
         self.applied = []
+        self.converge_task = None
         self.squelch = []
         self.vfo = FakeVfo(control=self.control, window=self.window,
                            destination="239.1.2.3",
@@ -106,7 +107,9 @@ class FakeController:
         self.squelch.append(db)
 
     def apply_stations(self, stations, preset, audio_channels, snr_squelch,
-                       sample_rate):
+                       sample_rate, on_removals_done=None):
+        if on_removals_done is not None:
+            on_removals_done()
         self.applied.append((preset, sample_rate))
         self.monitored_freqs = {float(s.freq_hz) for s in stations}
 

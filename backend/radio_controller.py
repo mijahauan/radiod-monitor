@@ -79,6 +79,23 @@ class RadioController:
         # set the audio plane validates against -- not active_channels, which
         # fills in gradually while channels are still being created.
         self.monitored_freqs: set = set()
+
+        # The task that converges radiod's channel set onto the latest search.
+        # A search publishes its station list to the browser immediately -- the
+        # UI must be able to offer a station at once -- but the channels behind
+        # it are built afterwards, off the event loop. A tune that lands in
+        # that gap can be tuning against the PREVIOUS mode's channels: switch
+        # from NWS to FM, click a station before convergence finishes, and the
+        # seven NWS sensor channels are still on the air at 162 MHz pinning the
+        # shared front-end window, so the FM station cannot come up no matter
+        # where the anchor tries to put the window. The audio path awaits this
+        # before tuning.
+        self.converge_task = None
+
+        # Set by the search path once stale channels are gone; the audio path
+        # waits on it before tuning. Starts set so a tune before any search
+        # is never blocked.
+        self.removals_done = None
         # Whether the last-applied station set fit inside the receiver's
         # window and therefore got live channels (vs. directory mode, where
         # no channels are created up front). See fits_window / apply_stations.
@@ -216,6 +233,7 @@ class RadioController:
         audio_channels: int = 1,
         snr_squelch: bool = True,
         sample_rate: int = 48000,
+        on_removals_done=None,
     ):
         """
         Converge the radiod channel set to exactly the given stations.
@@ -228,6 +246,16 @@ class RadioController:
 
         Serialized with a lock so rapid searches (squelch/radius/mode
         changes) don't race.
+
+        `on_removals_done` is called from this thread the moment the stale
+        channels are gone, before the new ones are built. That split matters
+        to the audio path. Sensor channels for a band the VFO is not in stop
+        it dead: measured, seven live NWS sensors at 162 MHz with the VFO on
+        91.300 MHz FM produced 0 frames in 6 s even though the window had
+        correctly moved (LO 91.3000, IF +0.0). But making a tune wait for the
+        WHOLE convergence charges the listener for building sensors they are
+        not waiting on -- a switch back to NWS took 14 s. So audio waits for
+        the removals and not a moment longer.
         """
         if not self.control:
             logger.warning("apply_stations: no radiod connection")
@@ -235,7 +263,8 @@ class RadioController:
 
         with self._apply_lock:
             self._apply_stations_locked(
-                stations, preset, audio_channels, snr_squelch, sample_rate
+                stations, preset, audio_channels, snr_squelch, sample_rate,
+                on_removals_done,
             )
 
     def _apply_stations_locked(
@@ -245,6 +274,7 @@ class RadioController:
         audio_channels: int,
         snr_squelch: bool,
         sample_rate: int,
+        on_removals_done=None,
     ):
 
         self.preset = preset
@@ -352,6 +382,15 @@ class RadioController:
 
         self.active_channels.clear()
 
+        # Stale channels are gone; the audio path may tune now (see the
+        # docstring). Everything below only ADDS sensors, which no listener
+        # is waiting on.
+        if on_removals_done is not None:
+            try:
+                on_removals_done()
+            except Exception as e:
+                logger.debug(f"on_removals_done: {e}")
+
         # Keep the channels that are already right, and skip their round trips.
         # A channel counts as already right when radiod is serving it at the
         # expected frequency AND on OPUS — the frequency guards against a
@@ -439,11 +478,22 @@ class RadioController:
         socket connected to receive the activity they measure.
 
         This is not `close()`: the controller stays connected and the next
-        search rebuilds in about a second. The VFO's channel IS removed and
-        its SSRC forgotten, which is the one place this deliberately accepts
-        radiod's ~20 s purge -- `_ensure_channel_exists` creates a fresh one
-        on the next tune, and the caller only reaches here after an idle
-        grace period, so nothing is waiting on it.
+        search rebuilds in about a second.
+
+        The VFO's channel is deliberately NOT removed, and that is the whole
+        subtlety. An earlier version of this method did remove it and forget
+        its SSRC, reasoning that the 30 s idle grace was longer than radiod's
+        ~20 s purge. That is backwards: the purge starts when the channel is
+        REMOVED, so the grace period runs before it, not during it. A listener
+        who came back and clicked a station within 20 s of the release got a
+        freshly created channel with the same deterministic SSRC -- one radiod
+        was still reaping -- and it produced no RTP. Observed on 162.400 MHz,
+        a station that otherwise plays every time.
+
+        Keeping the channel costs one idle demodulator and the window sitting
+        where the last listener left it. Removing it costs a station that
+        silently fails to play, which is the bug this whole redesign exists to
+        eliminate.
         """
         if not self.control:
             return
@@ -453,8 +503,6 @@ class RadioController:
             logger.debug(f"release_idle: vfo stop: {e}")
 
         ssrcs = set(self.active_channels)
-        if self.vfo.ssrc is not None:
-            ssrcs.add(self.vfo.ssrc)
         for ssrc in ssrcs:
             try:
                 await asyncio.to_thread(self.control.remove_channel, ssrc)
@@ -462,13 +510,15 @@ class RadioController:
                 logger.debug(f"release_idle: remove {ssrc:08x}: {e}")
         self.active_channels.clear()
         self.monitored_freqs = set()
-        self.vfo.ssrc = None
-        self.vfo.preset = None
         try:
             await asyncio.to_thread(self.window.release, self.control)
         except Exception as e:
             logger.debug(f"release_idle: window release: {e}")
-        logger.info(f"Idle: released {len(ssrcs)} channels and the anchor")
+        logger.info(
+            f"Idle: released {len(ssrcs)} sensor channels and the anchor; "
+            f"the VFO channel stays (removing it would start a purge the next "
+            f"tune could land inside)"
+        )
 
     async def close(self):
         """Release every channel this app owns on radiod.
