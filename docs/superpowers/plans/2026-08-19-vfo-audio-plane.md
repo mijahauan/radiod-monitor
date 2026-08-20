@@ -17,6 +17,8 @@
 - The VFO is **retuned, never recreated**. Destroying a channel starts a ~20 s asynchronous purge in radiod; re-creating the same SSRC inside that window yields a dead channel. Any "fix" that removes and re-creates the VFO reintroduces the central bug.
 - **Centre the window before tuning.** A demodulator that starts parked at the window edge does not recover when the window later moves onto it.
 - The anchor must be placed on whichever side falls **outside** the current window. radiod ignores a channel already in range, so the wrong side is a silent no-op.
+- **The app never computes an SSRC.** `create_channel()` allocates one and returns it; the app stores that integer as an opaque handle. Frequency, preset, and sample rate are the app's vocabulary — transport identity is ka9q-python's. Importing `allocate_ssrc` in `backend/` is a defect.
+- The RTP receiver is bound to the channel's **SSRC** (`RadiodStream`), never to its frequency (`ManagedStream`), or a retune strands it on a second channel.
 - `WINDOW_FILL = 0.8`; `DEFAULT_USABLE_BW_HZ = 8_000_000.0`; anchor margin `6_000.0` Hz.
 - Audio verification is **content-based**: voice/hiss ratio and envelope variation against a known-good reference (NWR reads ≈14 and ≈0.4; steady hiss reads 0.03). Frame counts and RMS do not distinguish audio from noise.
 - Run everything through the project venv: `venv/bin/python`, `venv/bin/pytest`.
@@ -396,13 +398,28 @@ LO sits, and the wrong choice is a silent no-op."
 
 **Interfaces:**
 - Consumes: `FrontEndWindow` from Task 1.
-- Produces: `class Vfo` with `async tune(freq_hz, preset, sample_rate) -> dict`, `async add_listener(queue)`, `async remove_listener(queue) -> bool`, `async stop()`, and `vfo_ssrc(control, destination) -> int`. The dict returned by `tune()` is the `tuned`/`nosignal` message the socket sends verbatim.
+- Produces: `class Vfo` with `async tune(freq_hz, preset, sample_rate) -> dict`, `async add_listener(queue)`, `async remove_listener(queue) -> bool`, `async stop()`, and the module function `opus_channels(frame) -> int | None`. The dict returned by `tune()` is the `tuned`/`nosignal` message the socket sends verbatim.
+- **Produces no SSRC function.** The app never computes an SSRC. `control.create_channel()` allocates one and returns it; the VFO stores that integer as an opaque handle and passes it back to the library. If you find yourself importing `allocate_ssrc`, stop — you are re-implementing the library's job.
+
+**Why there is no `ManagedStream` here.** `ManagedStream` is bound to the
+*parameters* it was constructed with, not to a channel: it calls
+`ensure_channel(frequency_hz=…, preset=…)` at start and again on every restore
+(`managed_stream.py:237,421`), deriving the SSRC from them each time. Retune the
+VFO and its restore would compute the SSRC of the *old* frequency, silently
+create a second channel, and listen to the wrong one. `RadiodStream` filters on
+`channel.ssrc`, which a retune does not change — so it follows the VFO. That is
+the whole reason this task uses the lower-level class.
+
+Losing `ManagedStream` also loses its restore loop, and that is a gain: the loop
+cannot tell an idle station from a dead channel, so it fired on silence and
+produced the restore storms this redesign exists to end. A genuinely forgotten
+channel is caught explicitly instead — see `_ensure_channel_exists` below.
 
 - [ ] **Step 1: Write the failing test**
 
 ```python
 # tests/test_vfo.py
-"""The VFO's identity and retry policy.
+"""The VFO's identity, ownership, and tuning order.
 
 No radiod: a fake control records the commands issued so the ORDER can be
 asserted. Order is the whole point -- a demodulator that starts while parked
@@ -412,21 +429,41 @@ the window must be centred BEFORE the frequency is set.
 import sys, os, asyncio
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from backend.vfo import Vfo, vfo_ssrc
+import backend.vfo as vfo_mod
+from backend.vfo import Vfo
+
+
+class FakeChannelInfo:
+    def __init__(self, ssrc, freq=1.0e6):
+        self.ssrc = ssrc
+        self.frequency = freq
+        self.multicast_address = "239.0.0.1"
+        self.port = 5004
+        self.sample_rate = 48000
 
 
 class FakeControl:
-    def __init__(self):
+    """Records calls. `known` is the set of SSRCs radiod admits to having."""
+
+    def __init__(self, known=()):
         self.calls = []
         self.status_address = "fake-radiod.local"
+        self.known = set(known)
+        self._next_ssrc = 0x1234
 
-    def ensure_channel(self, **kw):
-        self.calls.append(("ensure_channel", kw.get("frequency_hz"), kw.get("preset")))
-        class Ch:
-            ssrc = 0x1234
-            multicast_address = "239.0.0.1"
-            port = 5004
-        return Ch()
+    def create_channel(self, **kw):
+        assert kw.get("ssrc") is None or "ssrc" not in kw, (
+            "the app must not choose the SSRC -- let the library allocate it"
+        )
+        ssrc = self._next_ssrc
+        self._next_ssrc += 1
+        self.known.add(ssrc)
+        self.calls.append(("create_channel", kw.get("frequency_hz"), kw.get("preset")))
+        return ssrc
+
+    def poll_channel(self, ssrc, **kw):
+        self.calls.append(("poll_channel", ssrc))
+        return FakeChannelInfo(ssrc) if ssrc in self.known else None
 
     def set_frequency(self, ssrc, hz):
         self.calls.append(("set_frequency", hz))
@@ -446,13 +483,11 @@ class FakeControl:
 
 class FakeWindow:
     def __init__(self):
-        self.centred_on = []
         self.low_edge_hz, self.high_edge_hz = -330_240.0, 330_240.0
         self.usable_bw_hz = 660_480.0
         self.anchor_ssrc = None
 
     def centre_on(self, control, freq_hz, destination, sample_rate, ssrc_hint=None):
-        self.centred_on.append(freq_hz)
         control.calls.append(("centre_on", freq_hz))
         return True
 
@@ -460,16 +495,48 @@ class FakeWindow:
         control.calls.append(("release",))
 
 
-def test_ssrc_is_stable_across_frequency_and_preset():
+class FakeVfo(Vfo):
+    """A Vfo whose stream is a stand-in and whose RTP always arrives."""
+
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        self.started = 0
+
+    async def _start_stream(self):
+        self.started += 1
+        self._stream = "fake-stream"
+
+    def _tune_once(self, *a, **kw):
+        super()._tune_once(*a, **kw)
+        self._frames_seen = 1  # pretend RTP followed the retune
+
+
+def make():
     c = FakeControl()
-    a = vfo_ssrc(c, "239.1.2.3")
-    b = vfo_ssrc(c, "239.1.2.3")
-    assert a == b, "the VFO's identity must not depend on what it is tuned to"
+    v = FakeVfo(control=c, window=FakeWindow(), destination="239.1.2.3",
+                settle_sec=0.01)
+    return c, v
 
 
-def test_tune_centres_the_window_before_setting_frequency():
-    c, w = FakeControl(), FakeWindow()
-    v = Vfo(control=c, window=w, destination="239.1.2.3")
+def test_the_app_never_computes_an_ssrc():
+    src = open(os.path.join(os.path.dirname(vfo_mod.__file__), "vfo.py")).read()
+    assert "allocate_ssrc" not in src, (
+        "the SSRC is the library's business; the app holds the handle it returns"
+    )
+
+
+def test_the_ssrc_is_the_one_the_library_allocated(monkeypatch):
+    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: [])
+    c, v = make()
+    asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
+    created = [x for x in c.calls if x[0] == "create_channel"]
+    assert len(created) == 1
+    assert v.ssrc in c.known
+
+
+def test_tune_centres_the_window_before_setting_frequency(monkeypatch):
+    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: [])
+    c, v = make()
     asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
     names = [x[0] for x in c.calls]
     assert "centre_on" in names and "set_frequency" in names
@@ -478,21 +545,21 @@ def test_tune_centres_the_window_before_setting_frequency():
     )
 
 
-def test_second_tune_does_not_create_a_channel():
-    c, w = FakeControl(), FakeWindow()
-    v = Vfo(control=c, window=w, destination="239.1.2.3")
+def test_second_tune_does_not_create_a_channel(monkeypatch):
+    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: [])
+    c, v = make()
     asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
-    creates_before = sum(1 for x in c.calls if x[0] == "ensure_channel")
     c.calls.clear()
     asyncio.run(v.tune(91_300_000.0, "wfm", 48000))
-    creates_after = sum(1 for x in c.calls if x[0] == "ensure_channel")
-    assert creates_before >= 1
-    assert creates_after == 0, "the VFO is retuned, never recreated"
+    assert not any(x[0] == "create_channel" for x in c.calls), (
+        "the VFO is retuned, never recreated"
+    )
+    assert v.started == 1, "and its stream follows the SSRC, so it is not restarted"
 
 
-def test_preset_is_sent_only_when_it_changes():
-    c, w = FakeControl(), FakeWindow()
-    v = Vfo(control=c, window=w, destination="239.1.2.3")
+def test_preset_is_sent_only_when_it_changes(monkeypatch):
+    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: [])
+    c, v = make()
     asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
     c.calls.clear()
     asyncio.run(v.tune(91_300_000.0, "wfm", 48000))
@@ -502,16 +569,50 @@ def test_preset_is_sent_only_when_it_changes():
     assert any(x[0] == "set_preset" for x in c.calls)
 
 
-def test_tune_never_removes_the_vfo_channel():
-    c, w = FakeControl(), FakeWindow()
-    v = Vfo(control=c, window=w, destination="239.1.2.3")
+def test_tune_never_removes_the_vfo_channel(monkeypatch):
+    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: [])
+    c, v = make()
     asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
     asyncio.run(v.tune(91_300_000.0, "wfm", 48000))
-    removed = [x for x in c.calls if x[0] == "remove_channel" and x[1] == 0x1234]
-    assert removed == [], (
+    assert not any(x[0] == "remove_channel" for x in c.calls), (
         "removing it starts a ~20s purge; re-creating inside that window "
         "yields a dead channel"
     )
+
+
+def test_an_existing_channel_on_our_destination_is_adopted(monkeypatch):
+    """Surviving a restart of THIS app, not of radiod."""
+    left_behind = FakeChannelInfo(0x9999)
+    monkeypatch.setattr(vfo_mod, "discover_channels",
+                        lambda *a, **k: [left_behind])
+    c = FakeControl(known={0x9999})
+    v = FakeVfo(control=c, window=FakeWindow(), destination="239.1.2.3",
+                settle_sec=0.01)
+    asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
+    assert v.ssrc == 0x9999
+    assert not any(x[0] == "create_channel" for x in c.calls), (
+        "a channel already on our destination IS the VFO -- adopt it"
+    )
+
+
+def test_a_channel_radiod_has_forgotten_is_recreated(monkeypatch):
+    """Surviving a restart of radiod."""
+    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: [])
+    c, v = make()
+    asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
+    first = v.ssrc
+    c.known.clear()          # radiod restarted; our channel is gone
+    c.calls.clear()
+    asyncio.run(v.tune(91_300_000.0, "wfm", 48000))
+    assert any(x[0] == "create_channel" for x in c.calls)
+    assert v.ssrc != first
+    assert v.started == 2, "a new channel means a new stream to follow it"
+
+
+def test_opus_channels_reads_the_toc_byte():
+    assert vfo_mod.opus_channels(b"") is None
+    assert vfo_mod.opus_channels(bytes([0b00000100])) == 2
+    assert vfo_mod.opus_channels(bytes([0b00000000])) == 1
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -524,24 +625,31 @@ Expected: FAIL — `ModuleNotFoundError: No module named 'backend.vfo'`
 ```python
 """The VFO: the one channel the user actually listens to.
 
-It has a fixed SSRC for the life of the process and is RETUNED, never
-recreated. That is the load-bearing rule. Destroying a radiod channel starts a
-~20 s asynchronous purge (radio.c reaps a channel only once its frequency is
-zero, after Channel_idle_timeout); re-creating the same deterministic SSRC
-inside that window hands back a channel radiod is still tearing down, which
-never produces RTP. Every "switching is broken" symptom in this project traces
-to that cycle.
+It is created once and RETUNED, never recreated. That is the load-bearing
+rule. Destroying a radiod channel starts a ~20 s asynchronous purge (radio.c
+reaps a channel only once its frequency is zero, after Channel_idle_timeout);
+re-creating the same SSRC inside that window hands back a channel radiod is
+still tearing down, which never produces RTP. Every "switching is broken"
+symptom in this project traces to that cycle.
+
+The SSRC is never computed here. `create_channel()` allocates one and returns
+it; this module stores that integer and hands it back to the library. The app's
+vocabulary is frequency, preset, and sample rate -- transport identity belongs
+to ka9q-python.
+
+The stream is a `RadiodStream` bound to that SSRC rather than a
+`ManagedStream` bound to a frequency, because only the former follows a
+retune; see the task notes.
 
 Tuning order matters as much as identity: the window is centred BEFORE the
 frequency is set, because a demodulator that starts parked at the window edge
 does not recover when the window later moves onto it.
 """
 import asyncio
-import hashlib
 import logging
-from typing import Dict, List, Optional
+from typing import List, Optional
 
-from ka9q import ManagedStream, StreamQuality, allocate_ssrc
+from ka9q import RadiodStream, StreamQuality, discover_channels
 from ka9q.types import Encoding
 
 logger = logging.getLogger(__name__)
@@ -550,20 +658,15 @@ logger = logging.getLogger(__name__)
 # channel is serving PCM, i.e. the OUTPUT_ENCODING grant did not take.
 MAX_OPUS_FRAME_BYTES = 1275
 
-# Silence is not a dropped stream: a station with no signal is silent while
-# perfectly healthy. Treating that as failure produced restore storms that
-# saturated radiod's control socket.
-DROP_TIMEOUT_SEC = 30.0
-RESTORE_INTERVAL_SEC = 10.0
-MAX_RESTORE_ATTEMPTS = 12
-
 # How long to wait for RTP after a tune before deciding the demod did not come
 # up, and how many times to restart it in place.
 TUNE_SETTLE_SEC = 1.5
 MAX_TUNE_ATTEMPTS = 2
 
-# A frequency no station uses, for the VFO's identity hash only.
-_IDENTITY_FREQ_HZ = 1.0
+# Squelch held open: wfm.c forces snr_enable on, so the only way to keep a
+# broadcast channel flowing is a threshold nothing fails.
+SQUELCH_OPEN_DB = -20.0
+SQUELCH_CLOSE_DB = -25.0
 
 
 def opus_channels(frame: bytes) -> Optional[int]:
@@ -573,37 +676,22 @@ def opus_channels(frame: bytes) -> Optional[int]:
     return 2 if (frame[0] >> 2) & 0x01 else 1
 
 
-def vfo_ssrc(control, destination: str) -> int:
-    """A stable SSRC for this app's VFO on this radiod.
-
-    Deliberately NOT derived from frequency or preset: an SSRC is only an
-    address, and radiod is happy to change everything else about a channel
-    that already exists. Deriving it from the station is what forced a new
-    channel per station.
-    """
-    seed = f"radiod-monitor-vfo|{destination}|{getattr(control, 'status_address', '')}"
-    nonce = int(hashlib.sha256(seed.encode()).hexdigest()[:8], 16)
-    return allocate_ssrc(
-        frequency_hz=_IDENTITY_FREQ_HZ, preset="iq", sample_rate=nonce % 1_000_000,
-        agc=False, gain=0.0, destination=destination, encoding=Encoding.OPUS,
-        radiod_host=getattr(control, "status_address", None),
-    )
-
-
 class Vfo:
     """One retunable channel plus its listener fan-out."""
 
-    def __init__(self, control, window, destination: str):
+    def __init__(self, control, window, destination: str,
+                 settle_sec: float = TUNE_SETTLE_SEC):
         self.control = control
         self.window = window
         self.destination = destination
+        self.settle_sec = settle_sec
         self.ssrc: Optional[int] = None
         self.freq_hz: Optional[float] = None
         self.preset: Optional[str] = None
         self.sample_rate: Optional[int] = None
         self.channels: Optional[int] = None
         self.listeners: List[asyncio.Queue] = []
-        self._stream: Optional[ManagedStream] = None
+        self._stream = None
         self._frames_seen = 0
         self._non_opus_warned = False
 
@@ -623,7 +711,11 @@ class Vfo:
         return True
 
     async def stop(self) -> None:
-        """Last listener gone: stop the stream and drop the anchor."""
+        """Last listener gone: stop the stream and drop the anchor.
+
+        The channel itself stays. It costs radiod one idle demodulator and
+        saves the next tune both a creation round-trip and the purge race.
+        """
         stream, self._stream = self._stream, None
         if stream is not None:
             try:
@@ -638,34 +730,81 @@ class Vfo:
     async def tune(self, freq_hz: float, preset: str, sample_rate: int) -> dict:
         """Point the VFO at a station. Returns the message to send listeners."""
         for attempt in range(1, MAX_TUNE_ATTEMPTS + 1):
+            self._frames_seen = 0
             await asyncio.to_thread(self._tune_once, freq_hz, preset,
                                     sample_rate, attempt > 1)
             if self._stream is None:
-                await self._start_stream(freq_hz)
-            self._frames_seen = 0
-            await asyncio.sleep(TUNE_SETTLE_SEC)
+                await self._start_stream()
+            await asyncio.sleep(self.settle_sec)
             if self._frames_seen > 0:
-                self.freq_hz, self.preset, self.sample_rate = freq_hz, preset, sample_rate
+                self.freq_hz, self.sample_rate = freq_hz, sample_rate
                 return {"type": "tuned", "freq_hz": freq_hz,
                         "channels": self.channels or 1}
             logger.info(
-                f"No RTP {TUNE_SETTLE_SEC}s after tuning {freq_hz/1e6:.3f} MHz "
+                f"No RTP {self.settle_sec}s after tuning {freq_hz/1e6:.3f} MHz "
                 f"(attempt {attempt}/{MAX_TUNE_ATTEMPTS})"
             )
-        self.freq_hz, self.preset, self.sample_rate = freq_hz, preset, sample_rate
+        self.freq_hz, self.sample_rate = freq_hz, sample_rate
         return {"type": "nosignal", "freq_hz": freq_hz}
+
+    def _ensure_channel_exists(self, freq_hz: float, preset: str,
+                               sample_rate: int) -> bool:
+        """Make sure `self.ssrc` names a channel radiod currently has.
+
+        Returns True if a NEW channel was created (the caller must then point
+        a new stream at it). Three cases, in order of cost:
+
+          1. We already hold an SSRC radiod still knows -- nothing to do.
+          2. A channel is sitting on our destination from a previous run of
+             this app -- adopt it. Adopting is strictly better than removing
+             and re-creating, which would start the purge we exist to avoid.
+          3. Nothing there -- create one and keep whatever SSRC the library
+             allocates.
+        """
+        if self.ssrc is not None:
+            if self.control.poll_channel(self.ssrc, timeout=2.0) is not None:
+                return False
+            logger.warning(
+                f"radiod no longer has SSRC {self.ssrc} -- it restarted; "
+                f"re-establishing the VFO"
+            )
+            self.ssrc = None
+            self.preset = None
+
+        try:
+            existing = [
+                ch for ch in discover_channels(self.control.status_address)
+                if getattr(ch, "multicast_address", None) == self.destination
+            ]
+        except Exception as e:
+            logger.debug(f"vfo adopt scan: {e}")
+            existing = []
+        if existing:
+            self.ssrc = existing[0].ssrc
+            self.preset = None  # unknown -- force a preset command below
+            logger.info(f"Adopted existing channel SSRC {self.ssrc} as the VFO")
+            return True
+
+        self.ssrc = self.control.create_channel(
+            frequency_hz=freq_hz, preset=preset, sample_rate=sample_rate,
+            gain=0.0, destination=self.destination, encoding=Encoding.OPUS,
+        )
+        self.preset = preset
+        logger.info(f"Created the VFO: SSRC {self.ssrc} on {self.destination}")
+        return True
 
     def _tune_once(self, freq_hz: float, preset: str, sample_rate: int,
                    restart_demod: bool) -> None:
         """Blocking half of a tune. Centre first, then set frequency."""
-        if self.ssrc is None:
-            self.ssrc = vfo_ssrc(self.control, self.destination)
-            self.control.ensure_channel(
-                frequency_hz=freq_hz, preset=preset, sample_rate=sample_rate,
-                gain=0.0, destination=self.destination,
-                encoding=Encoding.OPUS, timeout=5.0, ssrc=self.ssrc,
-            )
-            self.preset = preset
+        fresh = self._ensure_channel_exists(freq_hz, preset, sample_rate)
+        if fresh and self._stream is not None:
+            # The old stream is following an SSRC that no longer exists.
+            try:
+                self._stream.stop()
+            except Exception as e:
+                logger.debug(f"vfo stream stop: {e}")
+            self._stream = None
+
         # Centre BEFORE tuning: a demod that starts at the edge never recovers.
         self.window.centre_on(self.control, freq_hz, self.destination,
                               sample_rate, ssrc_hint=self.ssrc)
@@ -678,24 +817,30 @@ class Vfo:
         self.control.set_output_encoding(self.ssrc, Encoding.OPUS)
         try:
             self.control.set_squelch(self.ssrc, enable=True,
-                                     open_snr_db=-20.0, close_snr_db=-25.0)
+                                     open_snr_db=SQUELCH_OPEN_DB,
+                                     close_snr_db=SQUELCH_CLOSE_DB)
         except Exception as e:
             logger.debug(f"vfo squelch: {e}")
 
-    async def _start_stream(self, freq_hz: float) -> None:
+    async def _start_stream(self) -> None:
+        """Attach a RadiodStream to the VFO's SSRC.
+
+        It filters on that SSRC, so it keeps delivering across every retune --
+        the reason this is not a ManagedStream.
+        """
+        info = await asyncio.to_thread(self.control.poll_channel, self.ssrc)
+        if info is None:
+            logger.error(f"No status for SSRC {self.ssrc}; cannot start stream")
+            return
+
         loop = asyncio.get_running_loop()
 
         def on_samples(samples: List[bytes], quality: StreamQuality):
             if not loop.is_closed():
                 loop.call_soon_threadsafe(self._broadcast, samples)
 
-        stream = ManagedStream(
-            control=self.control, frequency_hz=freq_hz, preset=self.preset,
-            sample_rate=self.sample_rate or 48000, gain=0.0,
-            destination=self.destination, encoding=Encoding.OPUS,
-            on_samples=on_samples, drop_timeout_sec=DROP_TIMEOUT_SEC,
-            restore_interval_sec=RESTORE_INTERVAL_SEC,
-            max_restore_attempts=MAX_RESTORE_ATTEMPTS,
+        stream = RadiodStream(
+            channel=info, on_samples=on_samples,
             samples_per_packet=960, deliver_interval_packets=1,
             raw_payloads=True,
         )
@@ -737,22 +882,35 @@ class Vfo:
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `venv/bin/pytest tests/test_vfo.py -v`
-Expected: 5 passed.
+Expected: 9 passed.
 
-If `ensure_channel` in your installed ka9q-python does not accept an `ssrc=`
-keyword, drop that argument and instead call `control.create_channel(...)` with
-the explicit SSRC, or set the frequency on the computed SSRC directly — report
-in your notes which you used and why.
+Two library facts this task depends on — verify them rather than assuming, and
+say in your report what you found:
+
+- `control.create_channel(...)` auto-allocates an SSRC when `ssrc` is omitted
+  and returns it (`ka9q/control.py`, "if ssrc is None: ssrc = allocate_ssrc").
+  Do **not** pass `ssrc=`.
+- `control.poll_channel(ssrc, timeout=…)` returns a `ChannelInfo` or `None`,
+  and `RadiodStream(channel=…)` needs `multicast_address`, `port`, `ssrc`, and
+  `sample_rate` off it.
+
+If either differs in the installed version, adapt and report the difference —
+do not reintroduce an app-side SSRC computation to work around it.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add backend/vfo.py tests/test_vfo.py
-git commit -m "feat(vfo): one retunable channel with a stable identity
+git commit -m "feat(vfo): one retunable channel the library names
 
-The SSRC no longer depends on what the channel is tuned to, so switching
-stations is a retune rather than a channel lifecycle. Tests assert the two
-rules that matter: centre before tuning, and never remove the VFO."
+The app no longer computes SSRCs: create_channel allocates one and the VFO
+holds it as an opaque handle. Switching stations is a retune rather than a
+channel lifecycle, and the stream follows the SSRC (RadiodStream) instead of
+the frequency (ManagedStream), so a retune does not strand it.
+
+Tests assert the rules that matter: never compute an SSRC, centre before
+tuning, never remove the VFO, adopt what is already on our destination, and
+re-create only when radiod has genuinely forgotten us."
 ```
 
 ---
@@ -781,7 +939,15 @@ In `connect()`, after the control is created and the window probed:
 
 ```python
         self.vfo.control = self.control
+        self.vfo.ssrc = None      # an SSRC belongs to one radiod, not to us
+        self.vfo.preset = None
 ```
+
+Clearing the SSRC is not optional. It is a handle into *this* radiod's channel
+table; carrying it across a host switch would aim commands at whatever the new
+radiod happens to have under that number. The next `tune()` polls it, finds
+nothing, and adopts or creates on the new host — the same path a radiod restart
+takes.
 
 - [ ] **Step 2: Release the VFO on close and on host switch**
 

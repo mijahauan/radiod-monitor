@@ -16,8 +16,8 @@ That single choice generates the whole failure set. Creating a channel places
 it at the front-end window edge, where the `wfm` demodulator produces nothing.
 Destroying one starts a ~20 s asynchronous purge, so re-selecting the same
 station re-creates an SSRC radiod is still tearing down and gets a dead
-channel. A channel that yields no RTP looks "dropped", so `ManagedStream`
-restores it every few seconds, and each restore is a channel create — which
+channel. A channel that yields no RTP looks "dropped", so `ManagedStream`'s
+restore loop re-creates it every few seconds, and each restore is a channel create — which
 saturates radiod's control socket and makes the next click queue behind it.
 
 ## Principle
@@ -73,9 +73,15 @@ onto it — measured repeatedly, including with radiod's own `tune` utility.
 3. On a mode change only, `set_preset` as well. radiod restarts the demod,
    which is exactly what a preset change should do.
 
-No channel creation, no teardown, no purge wait. Because the SSRC is stable,
-the `ManagedStream` and the browser's WebSocket both stay attached across the
-switch.
+No channel creation, no teardown, no purge wait. Because the SSRC is stable, both
+the RTP receiver and the browser's WebSocket stay attached across the switch.
+
+The receiver must therefore be bound to the *channel*, not to the parameters
+that once described it. `ManagedStream` is the latter: it calls
+`ensure_channel(frequency_hz=…, preset=…)` at start and on every restore, so
+after a retune it would derive the old station's SSRC and create a second
+channel. The VFO uses `RadiodStream`, which filters on `channel.ssrc` — a value
+a retune does not change.
 
 ## Protocol
 
@@ -171,8 +177,11 @@ exist.
   reported rather than papered over.
 - **`tune` for a frequency not in the current search** — rejected on the
   message, as the route does today.
-- **radiod restart mid-session** — the VFO's SSRC is stable, so re-creating it
-  is the normal path; `ManagedStream`'s restore handles it.
+- **radiod restart mid-session** — the next tune polls the VFO's SSRC, finds
+  radiod no longer has it, and creates a replacement channel, pointing a new
+  receiver at it. This is explicit, not a background restore loop: silence and
+  death are indistinguishable to a timer, which is why the old restore loop
+  fired on idle stations and produced the storms described above.
 
 ## Testing
 
