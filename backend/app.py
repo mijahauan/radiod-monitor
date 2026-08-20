@@ -7,7 +7,7 @@ Architecture (see README.md and CLAUDE.md):
     /api/radiod/select      POST  → switch the backing radiod instance
     /api/sources            GET   → {sources: [{key, display_name, controls}]}
     /ws/control             WS    ← search, activity updates
-    /ws/audio/{freq_hz}     WS    ← raw Opus frames (binary, one per message)
+    /ws/audio                WS    ← raw Opus frames (binary, one per message)
 
 The backend is source-agnostic below the control WebSocket. On a search
 message it looks up the requested Source, asks it for a station list and
@@ -32,7 +32,6 @@ from pydantic import BaseModel
 from ka9q import discover_channels
 from ka9q.discovery import discover_radiod_services
 
-from .audio_streamer import streamer
 from .geo import parse_location
 from .radio_controller import RadioController
 from . import sources as source_registry
@@ -148,7 +147,6 @@ async def lifespan(app: FastAPI):
         await monitor_task
     except asyncio.CancelledError:
         pass
-    await streamer.stop_all()
     await controller.close()
 
 
@@ -200,9 +198,9 @@ async def radiod_select(body: HostSelect):
 
     logger.info(f"Switching radiod host: {controller.radiod_host} → {new_host}")
 
-    # Stop any in-flight audio streams (they're bound to the old host's
-    # multicast groups and would otherwise keep the old ManagedStream alive).
-    await streamer.stop_all()
+    # Stop the VFO stream (it's bound to the old host's multicast group and
+    # would otherwise keep streaming against a radiod that no longer exists).
+    await controller.vfo.stop()
     await controller.close()
     controller.radiod_host = new_host
     try:
@@ -308,11 +306,6 @@ async def _handle_search(websocket: WebSocket, data: Dict[str, Any]):
             source.snr_squelch,
             source.sample_rate,
         )
-        # A mode switch drops frequencies from the monitored set. Any stream
-        # still running on one of those has just had its channel deleted, and
-        # ManagedStream would otherwise keep re-creating it against the next
-        # search's removals — see AudioStreamer.drop_unmonitored.
-        await streamer.drop_unmonitored(controller.monitored_freqs)
         # A mode switch may leave the anchor centred on a frequency that no
         # longer belongs to this search. The anchor channel is exempt from
         # the stale-channel sweep in _apply_stations_locked (that is what
@@ -327,9 +320,8 @@ async def _handle_search(websocket: WebSocket, data: Dict[str, Any]):
         # unconditionally would un-centre the window out from under whoever
         # is currently listening on an anchored station — exactly the
         # "search cuts off audio" regression this project already fixed
-        # once. Task 4 replaces this gate with `not controller.vfo.listeners`
-        # once the VFO owns listener tracking directly.
-        if not any(streamer.listeners.values()):
+        # once.
+        if not controller.vfo.listeners:
             controller.window.release(controller.control)
 
     asyncio.create_task(_converge())
@@ -338,39 +330,21 @@ async def _handle_search(websocket: WebSocket, data: Dict[str, Any]):
 # ---------------------------------------------------------------------------
 # Audio WebSocket
 # ---------------------------------------------------------------------------
-@app.websocket("/ws/audio/{freq_hz}")
-async def websocket_audio(websocket: WebSocket, freq_hz: float):
-    """
-    Streams raw Opus frames for a single monitored frequency. One binary
-    message per Opus frame (20 ms @ 48 kHz). WebSocket/TCP preserves order;
-    the browser feeds each message into WebCodecs AudioDecoder.
+@app.websocket("/ws/audio")
+async def websocket_audio(websocket: WebSocket):
+    """One socket for the session; the station changes underneath it.
 
-    Ahead of the audio, one JSON text message carries the stream's real
-    channel count, read from the first Opus frame's TOC byte. The browser
-    cannot configure a decoder without it, and a preset-derived guess is
-    not reliable (see audio_streamer.opus_channels).
+    The browser sends {"tune": freq_hz} to change station. Because the VFO's
+    SSRC never changes, no WebSocket, stream or radiod channel is torn down or
+    created on a switch -- it is two commands to radiod.
 
-    The frequency must be one the current search is monitoring. Without that
-    check this route creates a radiod channel at whatever frequency it is
-    handed, so anything that can open the socket can allocate channels on
-    the receiver -- and those channels then sit there, outside the set that
-    apply_stations() knows how to clean up.
+    Every "tuned" message is a boundary marker: the browser resets its Opus
+    decoder on it, which it must do anyway because the channel count can
+    differ between presets.
     """
     await websocket.accept()
-    if not any(abs(f - freq_hz) < 1.0 for f in controller.monitored_freqs):
-        logger.warning(
-            f"Rejecting audio request for {freq_hz/1e6:.3f} MHz: "
-            f"not in the monitored set"
-        )
-        await websocket.send_json({
-            "type": "error",
-            "message": f"{freq_hz/1e6:.3f} MHz is not currently monitored — "
-                       f"run a search first.",
-        })
-        await websocket.close()
-        return
     queue: asyncio.Queue = asyncio.Queue(maxsize=200)
-    await streamer.add_listener(freq_hz, queue, controller)
+    await controller.vfo.add_listener(queue)
 
     async def _pump():
         while True:
@@ -380,17 +354,30 @@ async def websocket_audio(websocket: WebSocket, freq_hz: float):
             else:
                 await websocket.send_bytes(item)
 
+    async def _commands():
+        while True:
+            msg = await websocket.receive_json()
+            freq_hz = msg.get("tune")
+            if freq_hz is None:
+                continue
+            freq_hz = float(freq_hz)
+            if not any(abs(f - freq_hz) < 1.0 for f in controller.monitored_freqs):
+                await websocket.send_json({
+                    "type": "error",
+                    "message": f"{freq_hz/1e6:.3f} MHz is not currently monitored — "
+                               f"run a search first.",
+                })
+                continue
+            result = await controller.vfo.tune(
+                freq_hz, controller.preset, controller.sample_rate
+            )
+            await websocket.send_json(result)
+
+    sender = asyncio.create_task(_pump())
+    commands = asyncio.create_task(_commands())
     try:
-        sender = asyncio.create_task(_pump())
-        # The browser never sends us anything on this socket, so the only
-        # way receive() completes is a disconnect (WebSocketDisconnect) or
-        # the connection dying underneath us. Racing it against the sender
-        # is what notices a silent station's listener going away -- without
-        # it, queue.get() blocks forever when no RTP ever arrives, and the
-        # ManagedStream cycles drop/restore every 5 s with nobody watching.
-        receiver = asyncio.create_task(websocket.receive())
         done, pending = await asyncio.wait(
-            {sender, receiver}, return_when=asyncio.FIRST_COMPLETED
+            {sender, commands}, return_when=asyncio.FIRST_COMPLETED
         )
         for t in pending:
             t.cancel()
@@ -406,12 +393,9 @@ async def websocket_audio(websocket: WebSocket, freq_hz: float):
     except WebSocketDisconnect:
         pass
     except Exception as e:
-        logger.debug(f"audio ws error for {freq_hz/1e6:.3f} MHz: {e}")
+        logger.debug(f"audio ws error: {e}")
     finally:
-        if await streamer.remove_listener(freq_hz, queue):
-            # Nobody is listening any more, so stop pinning the front end to
-            # this station; the next Listen re-aims it.
-            controller.window.release(controller.control)
+        await controller.vfo.remove_listener(queue)
 
 
 # ---------------------------------------------------------------------------
