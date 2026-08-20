@@ -259,6 +259,39 @@ def test_channels_on_other_groups_are_never_adopted(monkeypatch):
     assert created[0][3] == "239.1.2.3"
 
 
+def test_a_dying_channel_on_our_group_is_skipped_for_a_live_one(monkeypatch):
+    """radiod reaps a channel only once its frequency reads zero, so a
+    channel mid-purge on our OWN destination -- an app restart landing
+    inside the ~20 s window close() starts -- still answers discovery.
+    Adopting it hands the VFO a corpse, the exact failure this design
+    exists to remove. A live channel on the same group must win instead."""
+    dying = FakeChannelInfo(0x4444, freq=0.0, multicast_address="239.1.2.3")
+    live = FakeChannelInfo(0x5555, freq=91_300_000.0, multicast_address="239.1.2.3")
+    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {
+        ch.ssrc: ch for ch in (dying, live)
+    })
+    c, v = make()
+    asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
+    assert v.ssrc == 0x5555, "the live channel must be adopted, not the corpse"
+    assert not any(x[0] == "create_channel" for x in c.calls)
+
+
+def test_only_a_dying_channel_on_our_group_forces_a_fresh_create(monkeypatch):
+    """No live candidate on our group -- the zero-frequency one must be
+    passed over entirely, and a new channel created rather than adopting a
+    channel radiod is still tearing down."""
+    dying = FakeChannelInfo(0x4444, freq=0.0, multicast_address="239.1.2.3")
+    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {
+        dying.ssrc: dying
+    })
+    c, v = make()
+    asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
+    assert v.ssrc != 0x4444
+    created = [x for x in c.calls if x[0] == "create_channel"]
+    assert len(created) == 1, "the only candidate was dying -- create fresh"
+    assert created[0][3] == "239.1.2.3"
+
+
 def test_a_channel_radiod_has_forgotten_is_recreated(monkeypatch):
     """Surviving a restart of radiod."""
     monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
@@ -522,6 +555,33 @@ def test_a_control_message_displaces_audio_rather_than_being_dropped():
         items.append(q.get_nowait())
     assert msg in items
     assert len(items) == 3, "one frame was displaced, not appended"
+
+
+def test_put_control_never_displaces_an_earlier_control_message():
+    """The bug: displacing the queue HEAD can throw away an earlier control
+    dict rather than an audio frame -- e.g. a "tuned" that a slow consumer
+    hasn't drained yet -- leaving the browser ignoring every frame that
+    follows because it never got the header it needed. Both control
+    messages must survive; only a frame may be sacrificed."""
+    q = asyncio.Queue(maxsize=4)
+    early = {"type": "tuned", "freq_hz": 102_300_000.0, "channels": 1}
+    q.put_nowait(early)          # an earlier control message, already queued
+    q.put_nowait(b"f1")
+    q.put_nowait(b"f2")
+    q.put_nowait(b"f3")          # queue is now full
+
+    new = {"type": "nosignal", "freq_hz": 91_300_000.0}
+    vfo_mod.put_control(q, new)
+
+    items = []
+    while not q.empty():
+        items.append(q.get_nowait())
+
+    assert early in items, "the earlier control message must survive"
+    assert new in items, "the new control message must be enqueued"
+    frames = [x for x in items if isinstance(x, bytes)]
+    assert len(frames) == 2, "exactly one frame was displaced to make room"
+    assert len(items) == 4, "bounded by the queue's maxsize"
 
 
 def test_put_control_leaves_a_roomy_queue_alone():

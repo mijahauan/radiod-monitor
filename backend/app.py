@@ -327,6 +327,20 @@ async def _handle_search(websocket: WebSocket, data: Dict[str, Any]):
             source.snr_squelch,
             source.sample_rate,
         )
+        # A mode switch rebuilds the sensor set on a new band, and every
+        # ensure_channel makes radiod re-place the front end. A listener tuned
+        # to a station from the PREVIOUS search falls out of the window and
+        # simply goes quiet -- no nosignal, no UI change, nothing above DEBUG.
+        # Tell them, then release the VFO so the anchor can be dropped below.
+        vfo_freq = controller.vfo.freq_hz
+        if vfo_freq is not None and not any(
+                abs(f - vfo_freq) < 1.0 for f in controller.monitored_freqs):
+            stale = {"type": "nosignal", "freq_hz": vfo_freq,
+                     "reason": "station is not in the current search"}
+            for q in controller.vfo.listeners:
+                put_control(q, stale)
+            await controller.vfo.stop()
+
         # A mode switch may leave the anchor centred on a frequency that no
         # longer belongs to this search. The anchor channel is exempt from
         # the stale-channel sweep in _apply_stations_locked (that is what
@@ -345,20 +359,6 @@ async def _handle_search(websocket: WebSocket, data: Dict[str, Any]):
         # window out from under whoever is currently listening on an
         # anchored station, which is the "search cuts off audio" regression
         # this project already fixed once.
-        # A mode switch rebuilds the sensor set on a new band, and every
-        # ensure_channel makes radiod re-place the front end. A listener tuned
-        # to a station from the PREVIOUS search falls out of the window and
-        # simply goes quiet -- no nosignal, no UI change, nothing above DEBUG.
-        # Tell them, then release the VFO so the anchor can be dropped below.
-        vfo_freq = controller.vfo.freq_hz
-        if vfo_freq is not None and not any(
-                abs(f - vfo_freq) < 1.0 for f in controller.monitored_freqs):
-            stale = {"type": "nosignal", "freq_hz": vfo_freq,
-                     "reason": "station is not in the current search"}
-            for q in controller.vfo.listeners:
-                put_control(q, stale)
-            await controller.vfo.stop()
-
         if controller.vfo.freq_hz is None:
             # remove_channel on the control socket: blocking, like the rest.
             await asyncio.to_thread(controller.window.release,

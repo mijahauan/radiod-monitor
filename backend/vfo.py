@@ -72,18 +72,39 @@ def put_control(queue: "asyncio.Queue", msg: dict) -> None:
     interchangeable: the browser ignores every frame until a "tuned" message
     reconfigures its decoder, so a dropped "tuned" on a briefly stalled socket
     means permanent silence until the next click, while a dropped audio frame
-    costs 20 ms nobody notices. On overflow, throw away one queued item and
-    retry.
+    costs 20 ms nobody notices. On overflow, the item discarded to make room
+    must be an audio frame, never an earlier control message -- the queue
+    head is not good enough, because on a saturated queue it may itself be a
+    control dict. So: pop items one at a time, holding aside every dict
+    popped, until a `bytes` item is popped (discard it and stop) or the
+    queue runs empty; then re-put the held-aside dicts in their original
+    order, then the new message. Each pop shrinks the queue by one, so this
+    always terminates within `queue.maxsize` iterations.
     """
     try:
         queue.put_nowait(msg)
         return
     except asyncio.QueueFull:
         pass
-    try:
-        queue.get_nowait()
-    except asyncio.QueueEmpty:
-        pass
+
+    held = []
+    while True:
+        try:
+            item = queue.get_nowait()
+        except asyncio.QueueEmpty:
+            break
+        if isinstance(item, bytes):
+            break  # an audio frame -- discard it, room made
+        held.append(item)
+
+    for item in held:
+        try:
+            queue.put_nowait(item)
+        except asyncio.QueueFull:
+            logger.warning(
+                f"listener queue overflow restoring control message "
+                f"{item.get('type')!r}"
+            )
     try:
         queue.put_nowait(msg)
     except asyncio.QueueFull:
@@ -145,16 +166,23 @@ class Vfo:
 
         The channel itself stays. It costs radiod one idle demodulator and
         saves the next tune both a creation round-trip and the purge race.
+
+        Takes `self._lock` itself rather than trusting callers to hold it --
+        a caller outside `tune()` (a mode switch, `close()`) has no lock of
+        its own to offer, and without this a Listen click landing inside that
+        window could be stopped mid-tune and still be told "tuned". `tune()`
+        never calls this, directly or transitively, so there is no deadlock.
         """
-        stream, self._stream = self._stream, None
-        if stream is not None:
-            try:
-                await asyncio.to_thread(stream.stop)
-            except Exception as e:
-                logger.debug(f"vfo stop: {e}")
-        await asyncio.to_thread(self.window.release, self.control)
-        self.freq_hz = None
-        self.channels = None
+        async with self._lock:
+            stream, self._stream = self._stream, None
+            if stream is not None:
+                try:
+                    await asyncio.to_thread(stream.stop)
+                except Exception as e:
+                    logger.debug(f"vfo stop: {e}")
+            await asyncio.to_thread(self.window.release, self.control)
+            self.freq_hz = None
+            self.channels = None
 
     # -- tuning ------------------------------------------------------------
     async def tune(self, freq_hz: float, preset: str, sample_rate: int) -> dict:
@@ -240,6 +268,14 @@ class Vfo:
              probe's throwaway channel too, so it would adopt an arbitrary
              station's channel, or one radiod was still purging -- a dead
              channel, the precise failure this design exists to eliminate.
+             The destination alone does not rule out the "still purging"
+             case, though: radiod reaps a channel only once its frequency
+             reads zero, so a channel mid-purge on OUR OWN destination (an
+             app restart landing inside the ~20 s window `close()` starts,
+             which `reload=True` makes routine in development) still answers
+             discovery right up until it is reaped. `frequency != 0` below
+             is the same freshness gate the sensor reuse path in
+             `radio_controller.py` uses for exactly this reason.
           3. Nothing there -- create one and keep whatever SSRC the library
              allocates.
         """
@@ -268,6 +304,7 @@ class Vfo:
             existing = [
                 ch for ch in found.values()
                 if dest_ip in (ch.multicast_address or "")
+                and (ch.frequency or 0.0) != 0.0
             ]
         except Exception as e:
             logger.debug(f"vfo adopt scan: {e}")
