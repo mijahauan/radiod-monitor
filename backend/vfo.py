@@ -133,18 +133,30 @@ class Vfo:
                 await self._settle()
                 if self._frames_seen > 0:
                     self.sample_rate = sample_rate
-                    return {"type": "tuned", "freq_hz": freq_hz,
-                            "channels": self.channels or 1}
+                    result = {"type": "tuned", "freq_hz": freq_hz,
+                              "channels": self.channels or 1}
+                    self._broadcast_message(result)
+                    return result
                 logger.info(
                     f"No RTP {self.settle_sec}s after tuning {freq_hz/1e6:.3f} MHz "
                     f"(attempt {attempt}/{MAX_TUNE_ATTEMPTS})"
                 )
             self.sample_rate = sample_rate
-            return {"type": "nosignal", "freq_hz": freq_hz}
+            result = {"type": "nosignal", "freq_hz": freq_hz}
+            self._broadcast_message(result)
+            return result
 
     async def _settle(self) -> None:
         """Wait for RTP to appear after a retune. A seam for tests."""
         await asyncio.sleep(self.settle_sec)
+
+    def _broadcast_message(self, msg: dict) -> None:
+        """Enqueue a control dict (tuned/nosignal) to every listener queue."""
+        for q in self.listeners:
+            try:
+                q.put_nowait(msg)
+            except asyncio.QueueFull:
+                pass
 
     def _ensure_channel_exists(self, freq_hz: float, preset: str,
                                sample_rate: int) -> bool:
@@ -281,14 +293,12 @@ class Vfo:
                 continue
             self._frames_seen += 1
             if self.channels is None:
+                # Ground truth for the channel count, latched from the first
+                # frame's TOC byte. `tune()` is the sole source of the
+                # "tuned" boundary marker sent to listeners -- it only
+                # returns after frames have been seen, so self.channels is
+                # already populated by the time it broadcasts.
                 self.channels = opus_channels(frame)
-                header = {"type": "tuned", "freq_hz": self.freq_hz,
-                          "channels": self.channels or 1}
-                for q in self.listeners:
-                    try:
-                        q.put_nowait(header)
-                    except asyncio.QueueFull:
-                        pass
             for q in self.listeners:
                 try:
                     q.put_nowait(frame)

@@ -254,7 +254,12 @@ def test_broadcast_drops_oversized_payload_and_logs_once(caplog):
     assert len(errors) == 1, "warn once per stream, not once per dropped frame"
 
 
-def test_broadcast_fans_out_and_sends_the_header_exactly_once():
+def test_broadcast_fans_out_frames_only_no_header():
+    """_broadcast latches self.channels from the TOC byte but no longer
+    emits a "tuned" header itself -- tune() is the sole source of that
+    message now, so two listeners retuning would otherwise each see it
+    twice (see test_tune_broadcasts_exactly_one_tuned_message_per_listener).
+    """
     c, v = make()
     v.freq_hz = 102_300_000.0
     q1, q2 = asyncio.Queue(), asyncio.Queue()
@@ -269,10 +274,44 @@ def test_broadcast_fans_out_and_sends_the_header_exactly_once():
         return items
 
     items1, items2 = drain(q1), drain(q2)
-    header = {"type": "tuned", "freq_hz": 102_300_000.0, "channels": 1}
-    assert items1[0] == header and items2[0] == header
-    assert items1.count(header) == 1 and items2.count(header) == 1
-    assert items1.count(mono_frame) == 2 and items2.count(mono_frame) == 2
+    assert items1 == [mono_frame, mono_frame]
+    assert items2 == [mono_frame, mono_frame]
+    assert v.channels == 1, "still latched from the TOC byte"
+
+
+def test_tune_broadcasts_exactly_one_tuned_message_per_listener(monkeypatch):
+    """Fix for the duplicate-boundary-marker bug: tune() must be the sole
+    source of the "tuned"/"nosignal" message, and every attached listener
+    -- not just the caller of tune() -- must receive exactly one."""
+    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
+    c, v = make()
+    q1, q2 = asyncio.Queue(), asyncio.Queue()
+    v.listeners.extend([q1, q2])
+    result = asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
+    assert result == {"type": "tuned", "freq_hz": 102_300_000.0, "channels": 1}
+
+    def drain(q):
+        items = []
+        while not q.empty():
+            items.append(q.get_nowait())
+        return items
+
+    items1, items2 = drain(q1), drain(q2)
+    assert items1 == [result]
+    assert items2 == [result]
+
+
+def test_tune_broadcasts_nosignal_to_every_listener(monkeypatch):
+    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
+    c = FakeControl()
+    v = SilentVfo(control=c, window=FakeWindow(), destination="239.1.2.3",
+                  anchor_destination="239.9.9.9", settle_sec=0.01)
+    q = asyncio.Queue()
+    v.listeners.append(q)
+    result = asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
+    assert result == {"type": "nosignal", "freq_hz": 102_300_000.0}
+    assert q.get_nowait() == result
+    assert q.empty()
 
 
 def test_remove_listener_keeps_running_while_listeners_remain():

@@ -17,6 +17,7 @@ The activity monitor polls discover_channels every 2 s and broadcasts SNR
 to all connected control sockets.
 """
 import asyncio
+import json
 import logging
 import math
 import os
@@ -198,9 +199,17 @@ async def radiod_select(body: HostSelect):
 
     logger.info(f"Switching radiod host: {controller.radiod_host} → {new_host}")
 
-    # Stop the VFO stream (it's bound to the old host's multicast group and
-    # would otherwise keep streaming against a radiod that no longer exists).
-    await controller.vfo.stop()
+    # Tell any open audio sockets the station is going away before we stop
+    # the stream out from under them -- controller.close() already calls
+    # vfo.stop(), so a redundant call here would be silent. Without this the
+    # browser just goes quiet with no indication why.
+    if controller.vfo.freq_hz is not None:
+        nosignal = {"type": "nosignal", "freq_hz": controller.vfo.freq_hz}
+        for q in controller.vfo.listeners:
+            try:
+                q.put_nowait(nosignal)
+            except asyncio.QueueFull:
+                pass
     await controller.close()
     controller.radiod_host = new_host
     try:
@@ -314,14 +323,17 @@ async def _handle_search(websocket: WebSocket, data: Dict[str, Any]):
         # can reach any more, surviving every later search until shutdown.
         # The next Listen recentres it via FrontEndWindow.centre_on.
         #
-        # Gated on there being no active listener: _converge() runs on
-        # *every* search, not just a mode switch (a radius tweak, a squelch
-        # change, a same-mode re-search all call it too), so releasing
-        # unconditionally would un-centre the window out from under whoever
-        # is currently listening on an anchored station — exactly the
-        # "search cuts off audio" regression this project already fixed
-        # once.
-        if not controller.vfo.listeners:
+        # Gated on the VFO not being tuned to anything, not on whether a
+        # session socket is open: the session socket is opened once per page
+        # load and stays open the whole time, so `vfo.listeners` alone is
+        # non-empty from load to close and would never gate this. `freq_hz`
+        # is None before the first tune and after stop() clears it, and is
+        # set for exactly as long as someone is hearing a station -- so this
+        # releases an idle session's anchor while still not un-centring the
+        # window out from under whoever is currently listening on an
+        # anchored station, which is the "search cuts off audio" regression
+        # this project already fixed once.
+        if controller.vfo.freq_hz is None:
             controller.window.release(controller.control)
 
     asyncio.create_task(_converge())
@@ -340,7 +352,10 @@ async def websocket_audio(websocket: WebSocket):
 
     Every "tuned" message is a boundary marker: the browser resets its Opus
     decoder on it, which it must do anyway because the channel count can
-    differ between presets.
+    differ between presets. `Vfo.tune()` broadcasts that message (and
+    "nosignal") to every listener queue itself, so `_commands` never sends
+    one directly -- `_pump` is the sole writer on this socket, which is the
+    invariant that lets two tasks share one WebSocket safely.
     """
     await websocket.accept()
     queue: asyncio.Queue = asyncio.Queue(maxsize=200)
@@ -356,22 +371,45 @@ async def websocket_audio(websocket: WebSocket):
 
     async def _commands():
         while True:
-            msg = await websocket.receive_json()
-            freq_hz = msg.get("tune")
-            if freq_hz is None:
-                continue
-            freq_hz = float(freq_hz)
-            if not any(abs(f - freq_hz) < 1.0 for f in controller.monitored_freqs):
-                await websocket.send_json({
-                    "type": "error",
-                    "message": f"{freq_hz/1e6:.3f} MHz is not currently monitored — "
-                               f"run a search first.",
-                })
-                continue
-            result = await controller.vfo.tune(
-                freq_hz, controller.preset, controller.sample_rate
-            )
-            await websocket.send_json(result)
+            msg = None
+            try:
+                # receive_json() itself can raise on bad input -- non-JSON
+                # text (JSONDecodeError) or a binary frame (KeyError) -- so
+                # it has to be inside the same guard as the body below. A
+                # disconnect raises WebSocketDisconnect, which is not in the
+                # except clause and must propagate to end the loop.
+                msg = await websocket.receive_json()
+                freq_hz = msg.get("tune")
+                if freq_hz is None:
+                    continue
+                freq_hz = float(freq_hz)
+                if not any(abs(f - freq_hz) < 1.0 for f in controller.monitored_freqs):
+                    try:
+                        queue.put_nowait({
+                            "type": "error",
+                            "message": f"{freq_hz/1e6:.3f} MHz is not currently monitored — "
+                                       f"run a search first.",
+                        })
+                    except asyncio.QueueFull:
+                        pass
+                    continue
+                # tune() broadcasts "tuned"/"nosignal" to every listener
+                # queue itself (Vfo._broadcast_message); the return value is
+                # not re-sent here to avoid a duplicate decoder-reset marker
+                # and a second writer on the socket.
+                await controller.vfo.tune(
+                    freq_hz, controller.preset, controller.sample_rate
+                )
+            except (ValueError, TypeError, KeyError, AttributeError,
+                    json.JSONDecodeError) as e:
+                logger.debug(f"audio ws: malformed command {msg!r}: {e}")
+                try:
+                    queue.put_nowait({
+                        "type": "error",
+                        "message": "Malformed tune request.",
+                    })
+                except asyncio.QueueFull:
+                    pass
 
     sender = asyncio.create_task(_pump())
     commands = asyncio.create_task(_commands())
