@@ -44,6 +44,9 @@ class FakeControl:
 
     def create_channel(self, **kw):
         self._maybe_raise("create_channel")
+        if kw.pop("force_new", False):
+            # The library steps past any SSRC radiod already has.
+            self._next_ssrc += 1
         assert kw.get("ssrc") is None or "ssrc" not in kw, (
             "the app must not choose the SSRC -- let the library allocate it"
         )
@@ -420,19 +423,26 @@ def test_remove_listener_stops_on_the_last_one():
     assert v.listeners == []
 
 
-def test_stop_releases_the_window_anchor():
+def test_stop_removes_nothing(monkeypatch):
+    """Neither the channel nor the anchor is dropped when listeners leave.
+
+    A channel radiod has not finished reaping breaks the demodulator of any
+    channel created after it -- measured at 91.300 MHz, identical window both
+    times: 3 lingering at freq 0 gave snr None and 0 frames, 0 lingering gave
+    snr 19.09 and 201 frames. Releasing the anchor here left exactly such a
+    corpse every time a listener closed the page, and the next tune inherited
+    it. centre_on retunes the anchor anyway, so dropping it bought nothing.
+    """
+    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
     c, v = make()
+    asyncio.run(v.tune(162_400_000.0, "nfm", 48000))
+    c.calls.clear()
     asyncio.run(v.stop())
-    assert ("release",) in c.calls
+    assert not any(x[0] == "release" for x in c.calls), "the anchor stays"
+    assert not any(x[0] == "remove_channel" for x in c.calls), "the channel stays"
+    assert v.freq_hz is None, "but the VFO is no longer tuned to anything"
 
 
-# ---------------------------------------------------------------------------
-# Tuning ORDER. Both of these fail against the shipped implementation, which
-# created the channel before centring and sent set_preset before
-# set_frequency. Neither shows up as an error: a wfm demod started at the
-# window edge produces plausible fragments of audio, which is exactly the
-# failure mode this project has already been burned by.
-# ---------------------------------------------------------------------------
 def test_the_retry_reissues_the_preset_after_the_frequency(monkeypatch):
     """A preset command is now only used as the RETRY -- it restarts the
     demodulator in place without destroying the channel. It must still come
@@ -606,31 +616,6 @@ def test_in_flight_frames_from_the_previous_station_do_not_count(monkeypatch):
     )
 
 
-def test_a_mode_change_removes_the_old_channel_before_creating(monkeypatch):
-    """Every channel shares the receiver's single front-end window, and a
-    channel live elsewhere in the spectrum stops the window being placed for
-    the station the listener picked. Measured, one channel each:
-
-        nfm 162.400 alone                  LO 162.4000  snr 8.51  251 frames
-        fresh wfm 91.300, nfm still alive  LO  91.5192  snr None    0 frames
-
-    91.5192 is 219.2 kHz off target -- radiod edge-parked the wfm channel
-    rather than centring it.
-    """
-    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
-    c, v = make()
-    asyncio.run(v.tune(162_400_000.0, "nfm", 48000))
-    first = v.ssrc
-    c.calls.clear()
-    asyncio.run(v.tune(91_300_000.0, "wfm", 48000))
-    names = [x[0] for x in c.calls]
-    assert "remove_channel" in names and "create_channel" in names
-    assert names.index("remove_channel") < names.index("create_channel"), (
-        "the old channel goes before the new one arrives, or they fight"
-    )
-    assert v.ssrc != first
-
-
 def test_a_wfm_station_change_replaces_the_channel(monkeypatch):
     """wfm dies on its first retune, wherever it is pointed. Measured on one
     channel: fresh at 91.300 gave snr 19.29 and 251 frames in 5 s; retuned to
@@ -688,17 +673,81 @@ def test_a_retune_centres_afterwards(monkeypatch):
     assert names.index("set_frequency") < names.index("centre_on")
 
 
-def test_the_first_tune_does_not_pay_for_a_discovery_listen(monkeypatch):
-    """discover_channels() is a fixed two-second listen for status multicast.
-    On the first tune of a session there is nothing of ours to find, and that
-    two seconds was most of the cold-start delay."""
-    calls = []
-    monkeypatch.setattr(vfo_mod, "discover_channels",
-                        lambda *a, **k: calls.append(1) or {})
+
+
+def test_a_mode_change_parks_the_old_channel_and_removes_nothing(monkeypatch):
+    """Two measurements pin this, and they pull opposite ways.
+
+    A channel left in the band we came from stops the window being placed for
+    the new one: nfm 162.400 alone gave LO 162.4000 and 251 frames, while a
+    fresh wfm 91.300 with that nfm still live gave LO 91.5192 -- 219.2 kHz
+    off -- and silence.
+
+    But removing it is worse. A channel radiod has not finished reaping breaks
+    the demodulator of one created after it. At 91.300 MHz, identical window
+    both times: 3 channels lingering at freq 0 gave 0 frames; 0 lingering gave
+    snr 19.09 and 201 frames. A cross-band switch used to leave two corpses.
+    """
+    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
+    c, v = make()
+    asyncio.run(v.tune(162_400_000.0, "nfm", 48000))
+    old = v.ssrc
+    c.calls.clear()
+    asyncio.run(v.tune(91_300_000.0, "wfm", 48000))
+    assert not any(x[0] == "remove_channel" for x in c.calls), (
+        "nothing is removed mid-session -- a corpse breaks the next demod"
+    )
+    parked = [x[1] for x in c.calls if x[0] == "set_frequency"]
+    assert 91_300_000.0 in parked, (
+        "the old channel is moved into the new band, not left behind"
+    )
+    assert v.ssrc != old
+
+
+def test_a_wfm_retry_asks_the_library_for_a_different_channel(monkeypatch):
+    """create_channel reuses an existing SSRC by design, so for a preset that
+    cannot be retuned, asking again returns the same channel -- and if that
+    channel was left dead by an earlier session, every attempt gets the corpse.
+    The retry sets force_new so the library steps to one radiod does not have.
+    The app still never picks an SSRC.
+    """
+    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
+    c = FakeControl()
+    seen = []
+
+    class DeafVfo(FakeVfo):
+        async def _settle(self):
+            return                      # no frames, so both attempts run
+
+    v = DeafVfo(control=c, window=FakeWindow(), destination="239.1.2.3",
+                anchor_destination="239.9.9.9", settle_sec=0.01, flush_sec=0.0)
+    real_create = c.create_channel
+
+    def spy(**kw):
+        seen.append(kw.get("force_new", False))
+        return real_create(**kw)
+    c.create_channel = spy
+
+    asyncio.run(v.tune(91_300_000.0, "wfm", 48000))
+    assert all(seen), (
+        "a preset that cannot be retuned never inherits whatever sits under "
+        "its deterministic SSRC -- an earlier session may have left a dead "
+        "channel there, and create_channel reuses by SSRC"
+    )
+
+
+def test_returning_to_an_fm_station_reuses_its_channel(monkeypatch):
+    """A wfm channel is created once per station and never retuned, so it
+    stays alive and can be returned to at once. Without this, coming back
+    re-derives the same deterministic SSRC, gets whatever is under it, and
+    pays a failed 2.5 s attempt before the retry rescues it -- measured as
+    FM's "tuned" arriving at 4.9 s instead of promptly."""
+    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
     c, v = make()
     asyncio.run(v.tune(91_300_000.0, "wfm", 48000))
-    assert calls == [], "nothing of ours exists yet, so nothing to discover"
-    # ...but once we own a channel, the sweep does run.
-    calls.clear()
-    asyncio.run(v.tune(93_900_000.0, "wfm", 48000))
-    assert calls, "a replacement must clear what we already made"
+    fm_ssrc = v.ssrc
+    asyncio.run(v.tune(162_400_000.0, "nfm", 48000))    # away to NWS
+    c.calls.clear()
+    asyncio.run(v.tune(91_300_000.0, "wfm", 48000))     # and back
+    assert v.ssrc == fm_ssrc, "the station's own channel, still alive"
+    assert not any(x[0] == "create_channel" for x in c.calls)
