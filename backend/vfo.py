@@ -20,13 +20,18 @@ Tuning order matters as much as identity: the window is centred BEFORE the
 frequency is set, because a demodulator that starts parked at the window edge
 does not recover when the window later moves onto it.
 
-The VFO's own channel and the window's anchor channel live on two DIFFERENT
-destinations. The anchor carries no audio -- it exists purely to make radiod
-park the front end where we want it -- so it has no business on the audio
-multicast group. Sharing one destination let the adopt-on-restart scan below
-pick up the anchor and mistake it for the VFO, which then "centred" the
-window on wherever the anchor happened to be instead of the station the user
-asked for.
+The VFO's channel, the window's anchor channel, and the activity-map sensor
+channels live on THREE DIFFERENT multicast destinations. That is not tidiness:
+`destination` is one of the inputs to the SSRC hash the library allocates
+from, so a VFO sharing the sensors' group and tuned to a monitored station
+gets the sensor's exact SSRC -- one channel doing two jobs, with the search's
+squelch and retunes landing on the channel the user is listening through.
+Distinct groups make the collision impossible, make the VFO and the anchor
+exempt from the stale-channel sweep structurally, and leave the adopt scan
+below looking at a group that contains nothing but the VFO. Sharing one
+destination previously let that scan pick up the anchor and mistake it for the
+VFO, which then "centred" the window on wherever the anchor happened to be
+instead of the station the user asked for.
 """
 import asyncio
 import logging
@@ -169,6 +174,11 @@ class Vfo:
           2. A channel is sitting on our destination from a previous run of
              this app -- adopt it. Adopting is strictly better than removing
              and re-creating, which would start the purge we exist to avoid.
+             This is only safe because the VFO has a destination to itself:
+             on the shared group the scan matched sensors and the front-end
+             probe's throwaway channel too, so it would adopt an arbitrary
+             station's channel, or one radiod was still purging -- a dead
+             channel, the precise failure this design exists to eliminate.
           3. Nothing there -- create one and keep whatever SSRC the library
              allocates.
         """

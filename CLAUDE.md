@@ -144,7 +144,7 @@ front end away; it must not run alongside this app on one receiver.
 
 Identical in shape to the aligned nws-monitor/repeater-monitor, just generalized:
 
-1. **Control plane — [backend/radio_controller.py](backend/radio_controller.py).** On a `search` message, the active `Source` returns a station list; `apply_stations()` converges the channel set based on what fits in the receiver's window. Channels live on a single stable multicast destination derived from `generate_multicast_ip("radiod-monitor")` — shared across all sources, so mode switching is a delta on the channel set rather than a teardown. SSRCs are deterministic (hash of frequency, preset, sample_rate, encoding, destination, agc, gain=0.0, and the radiod identity) so they survive server restarts and can be independently rediscovered by the audio streamer. Per-user squelch is applied *after* ensure_channel so it doesn't perturb the hash.
+1. **Control plane — [backend/radio_controller.py](backend/radio_controller.py).** On a `search` message, the active `Source` returns a station list; `apply_stations()` converges the channel set based on what fits in the receiver's window. Sensor channels live on a single stable multicast destination derived from `generate_multicast_ip("radiod-monitor")` — shared across all sources, so mode switching is a delta on the channel set rather than a teardown. The VFO and the anchor live on two *other* groups; see "Three multicast groups" below, and do not move them onto this one. SSRCs are deterministic (hash of frequency, preset, sample_rate, encoding, destination, agc, gain=0.0, and the radiod identity) so they survive server restarts and can be independently rediscovered by the audio streamer. Per-user squelch is applied *after* ensure_channel so it doesn't perturb the hash.
 
    **Convergence is a diff, and that is load-bearing.** Because the SSRC is a deterministic hash of exactly the parameters that define a channel, the wanted SSRC set is computable *before* talking to radiod — `allocate_ssrc()` with the same arguments `ensure_channel()` uses internally, including `radiod_host=control.status_address`. An existing channel on our destination whose SSRC is in that set is correct by construction, so it is left untouched; only SSRCs outside the set are removed, and only missing ones are created.
 
@@ -166,9 +166,27 @@ Identical in shape to the aligned nws-monitor/repeater-monitor, just generalized
 
    **WebCodecs requires a secure context** (HTTPS or `localhost`) — the shell script auto-generates a self-signed cert to satisfy this.
 
-### Sensor channels and the VFO (the one cross-file coupling left)
+### Three multicast groups, and why they must stay three
 
-`RadioController.apply_stations()` (the per-station sensor channels, which exist only to report SNR and are never listened to) and `Vfo.tune()` (the single channel a listener actually hears) both live on `self.destination` and both run `Encoding.OPUS`. Unlike the old per-station-audio-channel design, `preset` and `sample_rate` can no longer drift between the two paths by accident: `websocket_audio`'s command loop reads them straight off `controller.preset`/`controller.sample_rate` on every `vfo.tune()` call, so the VFO always tunes with whatever `apply_stations()` most recently set for the active `Source` — there is no second copy to keep in lockstep by hand. What *does* still have to be kept true if you touch either path: both must assert `OUTPUT_ENCODING = OPUS` after creating/retuning a channel (radiod otherwise serves the preset default on whichever path skipped it), and both must stay on the same `self.destination` — that's what lets `_apply_stations_locked`'s stale-channel sweep find the VFO's SSRC in the same discovery pass it uses to clean up sensor channels, so it can exempt it explicitly (see below) rather than never seeing it at all. `audio_channels` is not part of this coupling: it is a display hint (see above), and the decoder is configured from the first Opus frame's TOC byte instead.
+| group | attribute | slug | holds |
+|---|---|---|---|
+| sensors | `controller.destination` | `radiod-monitor` | the activity-map channels, one per station, never listened to |
+| VFO | `controller.vfo_destination` | `radiod-monitor-vfo` | the one channel a listener actually hears |
+| anchor | `controller.anchor_destination` | `radiod-monitor-anchor` | the squelched-shut channel that positions the front end |
+
+`destination` is one of the inputs to `allocate_ssrc`. So is frequency, preset, sample rate, encoding, gain, agc, and the radiod identity — and `create_channel()` auto-allocates from **exactly** the argument list `_apply_stations_locked` uses to compute the sensor set. Put the VFO on the sensor group and tune it to a station that is also monitored (NWS mode, always) and the two SSRCs are *the same integer*: one radiod channel doing both jobs. Measured, 162.475 MHz / `nfm` / 48 kHz / OPUS:
+
+```
+sensor group 239.123.74.180 -> 551094885
+VFO    group 239.161.73.136 -> 1767890759
+same group for both         -> 551094885 == 551094885   COLLIDE
+```
+
+Nothing about that fails loudly. The audio keeps playing while the search re-applies the user's squelch over the VFO's held-open one, retunes the channel the user is listening through back to the sensor's frequency, and reports one station's SNR on another station's marker. It also defeated the adopt-an-existing-channel scan in `Vfo._ensure_channel_exists`, which took `existing[0]` off the group and so could adopt an arbitrary sensor — or, in the first seconds after startup, `probe()`'s throwaway channel that radiod was still purging, which is a dead channel producing no audio.
+
+Separate groups make all of that impossible by construction, and make the VFO's and the anchor's exemption from the stale-channel sweep **structural**: neither can appear in the swept set at all. There is deliberately no `ssrc == vfo.ssrc` check in `_apply_stations_locked` — the one that used to be there never ran in the case it was written for (the aliased SSRC was in `desired`), which is precisely the kind of dead guard that has misled work in this repo before. If the VFO is ever swept, the bug is that it moved back onto the sensor group.
+
+What still has to be kept true across `RadioController.apply_stations()` and `Vfo.tune()`: both must assert `OUTPUT_ENCODING = OPUS` after creating or retuning a channel, or radiod serves the preset default on whichever path skipped it. `preset` and `sample_rate` cannot drift — `websocket_audio`'s command loop reads them off `controller.preset`/`controller.sample_rate` on every `vfo.tune()` call, and `_handle_search` publishes them synchronously before the results message reaches the browser so an eager Listen click cannot land in the gap. `audio_channels` is not part of this coupling: it is a display hint, and the decoder is configured from the first Opus frame's TOC byte instead.
 
 ### Host switching
 
@@ -283,13 +301,15 @@ Getting there took three fixes and disproved three earlier guesses in this file
      `choose_anchor_frequency()` computes both candidates and returns
      whichever is genuinely outside the window.
    - **The anchor lives on its own multicast destination**
-     (`radiod-monitor-anchor`), separate from the VFO's audio group. Sharing
-     one destination let the VFO's adopt-an-existing-channel scan mistake
-     the anchor for the VFO after a restart, which then "centred" the window
-     on wherever the anchor happened to be instead of the station the user
-     asked for. This separation is also why the anchor needs no exemption
-     from the stale-channel sweep, while **the VFO does** — see
-     `RadioController._apply_stations_locked`.
+     (`radiod-monitor-anchor`), and so does the VFO (`radiod-monitor-vfo`).
+     Sharing one destination let the VFO's adopt-an-existing-channel scan
+     mistake the anchor for the VFO after a restart, which then "centred"
+     the window on wherever the anchor happened to be instead of the station
+     the user asked for — and, worse, aliased the VFO's SSRC onto a sensor's.
+     `probe()`'s throwaway channel goes on the anchor group for the same
+     reason. See "Three multicast groups" above; neither the anchor nor the
+     VFO needs an exemption from the stale-channel sweep, because neither is
+     ever in the set it sweeps.
    - **A channel radiod parks at the window edge cannot be rescued by
      moving the window onto it afterwards** — the demodulator does not
      recover. Centre first, then tune. This is why `Vfo._tune_once` calls

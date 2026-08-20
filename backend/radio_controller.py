@@ -11,6 +11,13 @@ reachable by anyone who recomputes the hash with the same arguments (the
 VFO in backend/vfo.py does not do this -- it never computes an SSRC,
 it holds whatever create_channel() allocates it).
 
+Three multicast groups, not one, because `destination` is an input to that
+hash: sensors on `radiod-monitor`, the listened-to VFO on
+`radiod-monitor-vfo`, and the window-placing anchor on
+`radiod-monitor-anchor`. Distinct groups are what keep the VFO's SSRC from
+aliasing onto a sensor's, and what make both the VFO and the anchor exempt
+from the stale-channel sweep structurally rather than by a special case.
+
 Per-user settings (squelch) are applied after channel creation so they
 don't perturb the SSRC hash.
 """
@@ -91,11 +98,26 @@ class RadioController:
         # than a special case.
         self.anchor_destination: str = generate_multicast_ip("radiod-monitor-anchor")
 
+        # Where the VFO lives. A THIRD group, and it has to be: `destination`
+        # is one of the inputs to allocate_ssrc, and the sensor diff below
+        # derives its wanted set from exactly the argument list
+        # create_channel() auto-allocates from. On one destination, tuning the
+        # VFO to a frequency that is also a monitored station yields the
+        # identical SSRC -- the VFO's channel and the sensor channel become
+        # one channel, so the sweep exemption never fires, the search
+        # re-applies the user's squelch over the VFO's held-open one, and the
+        # activity map reports one station's SNR on another's marker. Distinct
+        # groups make that collision impossible by construction rather than by
+        # a check someone has to remember. It also gives the VFO's
+        # adopt-an-existing-channel scan a destination that contains nothing
+        # but the VFO -- no sensors, no probe channel mid-purge.
+        self.vfo_destination: str = generate_multicast_ip("radiod-monitor-vfo")
+
         # The one channel the user listens through. Separate from the sensor
         # channels in active_channels, which exist only to report SNR for the
         # activity map and are never listened to.
         self.vfo = Vfo(control=None, window=self.window,
-                       destination=self.destination,
+                       destination=self.vfo_destination,
                        anchor_destination=self.anchor_destination)
 
         self._apply_lock = threading.Lock()
@@ -107,8 +129,15 @@ class RadioController:
         except Exception as e:
             logger.error(f"Failed to connect to radiod: {e}")
             raise
+        # The probe's throwaway channel carries no audio and is removed
+        # immediately, but remove_channel is not instantaneous -- it lingers in
+        # discovery for a moment. On the VFO's group that lingering channel is
+        # exactly what the adopt scan would grab; on the sensor group it is a
+        # phantom station. It belongs with the anchor: infrastructure, not
+        # content.
         await asyncio.to_thread(
-            self.window.probe, self.control, self.destination, self.sample_rate
+            self.window.probe, self.control, self.anchor_destination,
+            self.sample_rate
         )
 
         self.vfo.control = self.control
@@ -303,15 +332,15 @@ class RadioController:
         for ssrc, ch in ours.items():
             if ssrc in desired:
                 continue
-            # The anchor is exempt structurally, not by a check here: it
-            # lives on self.anchor_destination (Task 2), never on
-            # self.destination, so it can never appear in `ours` at all.
-            if self.vfo.ssrc is not None and ssrc == self.vfo.ssrc:
-                # The VFO is not a station and is never in `desired`. A search
-                # re-derives the station set; it must not touch the channel the
-                # user is actually listening through, or the next tune lands
-                # inside radiod's ~20 s purge and comes back dead.
-                continue
+            # The VFO and the anchor are exempt STRUCTURALLY, not by a check
+            # here: they live on self.vfo_destination and
+            # self.anchor_destination, never on self.destination, so neither
+            # can appear in `ours` at all. There was an `ssrc == self.vfo.ssrc`
+            # guard here; it was dead in the only case that mattered (the VFO
+            # sharing this group aliased onto a sensor SSRC, so it was in
+            # `desired` and the guard never ran) and misleading everywhere
+            # else. Do not reintroduce it -- if the VFO is ever swept, the bug
+            # is that it moved back onto this destination.
             try:
                 self.control.remove_channel(ssrc)
                 logger.info(
@@ -421,7 +450,8 @@ class RadioController:
 
         dest_ips = tuple(
             d.split(":")[0]
-            for d in (self.destination, self.anchor_destination)
+            for d in (self.destination, self.vfo_destination,
+                      self.anchor_destination)
         )
         ssrcs = set(self.active_channels)
         try:
@@ -441,3 +471,10 @@ class RadioController:
         self.active_channels.clear()
         self.control.close()
         self.control = None
+        # The VFO holds its own reference to the same RadiodControl. Leaving it
+        # pointing at a closed socket is worse than clearing it: connect() is
+        # the only place that repairs it, so a host switch whose connect()
+        # fails would leave every later tune issuing commands on a dead socket
+        # and raising "Not connected to radiod" forever. Cleared, Vfo._tune_once
+        # fails fast and the listener is told why.
+        self.vfo.control = None

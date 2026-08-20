@@ -105,6 +105,15 @@ def make():
 
 
 def test_the_app_never_computes_an_ssrc():
+    """A lint, deliberately kept -- and deliberately not trusted alone.
+
+    It guards Global Constraint 3 for the cost of a string search, but it is
+    blind to the failure that actually happened: the library computes the very
+    same hash inside create_channel(), so the VFO can collide with a sensor
+    without the word `allocate_ssrc` ever appearing here. The behavioural half
+    is test_the_ssrc_is_the_one_the_library_allocated below, and the collision
+    half is in tests/test_apply_stations_sweep.py.
+    """
     src = open(os.path.join(os.path.dirname(vfo_mod.__file__), "vfo.py")).read()
     assert "allocate_ssrc" not in src, (
         "the SSRC is the library's business; the app holds the handle it returns"
@@ -112,11 +121,28 @@ def test_the_app_never_computes_an_ssrc():
 
 
 def test_the_ssrc_is_the_one_the_library_allocated(monkeypatch):
+    """Behavioural counterpart to the grep above: the SSRC the VFO ends up
+    holding is exactly the integer create_channel() handed back, not something
+    derived from the tune."""
     monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
-    c, v = make()
+    c = FakeControl()
+    allocated = []
+    real_create = c.create_channel
+
+    def spy(**kw):
+        ssrc = real_create(**kw)
+        allocated.append(ssrc)
+        return ssrc
+
+    c.create_channel = spy
+    v = FakeVfo(control=c, window=FakeWindow(), destination="239.1.2.3",
+                anchor_destination="239.9.9.9", settle_sec=0.01)
     asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
     created = [x for x in c.calls if x[0] == "create_channel"]
     assert len(created) == 1
+    assert allocated == [v.ssrc], (
+        "the VFO holds the library's handle verbatim"
+    )
     assert v.ssrc in c.known
 
 
@@ -180,8 +206,13 @@ def test_tune_never_removes_the_vfo_channel(monkeypatch):
     )
 
 
-def test_an_existing_channel_on_our_destination_is_adopted(monkeypatch):
-    """Surviving a restart of THIS app, not of radiod."""
+def test_an_existing_channel_on_the_vfo_destination_is_adopted(monkeypatch):
+    """Surviving a restart of THIS app, not of radiod.
+
+    The VFO's group holds the VFO and nothing else, so a channel found there
+    IS the VFO and adopting it beats removing and re-creating (which starts
+    radiod's ~20 s purge).
+    """
     left_behind = FakeChannelInfo(0x9999, multicast_address="239.1.2.3")
     monkeypatch.setattr(vfo_mod, "discover_channels",
                         lambda *a, **k: {left_behind.ssrc: left_behind})
@@ -191,8 +222,31 @@ def test_an_existing_channel_on_our_destination_is_adopted(monkeypatch):
     asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
     assert v.ssrc == 0x9999
     assert not any(x[0] == "create_channel" for x in c.calls), (
-        "a channel already on our destination IS the VFO -- adopt it"
+        "a channel already on the VFO's destination IS the VFO -- adopt it"
     )
+
+
+def test_channels_on_other_groups_are_never_adopted(monkeypatch):
+    """The blocker, from the VFO's side.
+
+    Sensors, the anchor, and the front-end probe's throwaway channel all used
+    to sit on the group this scan reads. `existing[0]` is dict-ordered, so the
+    VFO adopted an arbitrary one of them and retuned it -- or, just after
+    startup, adopted the probe channel radiod was still purging, which is a
+    dead channel that produces no audio.
+    """
+    sensor = FakeChannelInfo(0x1111, multicast_address="239.1.2.99")
+    anchor = FakeChannelInfo(0x2222, multicast_address="239.9.9.9")
+    probe = FakeChannelInfo(0x3333, multicast_address="239.9.9.9")
+    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {
+        ch.ssrc: ch for ch in (sensor, anchor, probe)
+    })
+    c, v = make()          # VFO on 239.1.2.3; nothing of ours is there
+    asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
+    assert v.ssrc not in (0x1111, 0x2222, 0x3333)
+    created = [x for x in c.calls if x[0] == "create_channel"]
+    assert len(created) == 1, "nothing on our group -- create one"
+    assert created[0][3] == "239.1.2.3"
 
 
 def test_a_channel_radiod_has_forgotten_is_recreated(monkeypatch):
