@@ -52,8 +52,20 @@ logger = logging.getLogger(__name__)
 # per attempt forever — that is what grew backend.log to 485 MB. Bounded, the
 # stream gives up after ~2 minutes and the user can re-arm it by clicking
 # Listen again, which builds a fresh ManagedStream.
-RESTORE_INTERVAL_SEC = 2.0
-MAX_RESTORE_ATTEMPTS = 60
+RESTORE_INTERVAL_SEC = 10.0
+MAX_RESTORE_ATTEMPTS = 12
+
+# How long a stream may be silent before ManagedStream calls it dropped and
+# starts re-creating the channel. This must be generous, because "no packets"
+# does NOT mean "channel is gone": a station with no signal, or one whose
+# front-end window has moved, is silent while perfectly healthy. Restoring it
+# does not help and is not free -- each attempt issues a channel create plus
+# commands, taking about a second of exclusive time on radiod's control
+# socket. At the old 5 s timeout a single silent station generated a restore
+# every 5 s forever, saturating the control plane and making the user's next
+# click take tens of seconds to get through. Measured: 26 restores while one
+# station sat silent.
+DROP_TIMEOUT_SEC = 30.0
 
 # RFC 6716 §3.4: a single Opus frame is at most 1275 bytes. A larger payload
 # means the channel is not actually serving Opus.
@@ -207,7 +219,7 @@ class AudioStreamer:
             on_samples=on_samples,
             on_stream_dropped=on_dropped,
             on_stream_restored=on_restored,
-            drop_timeout_sec=5.0,
+            drop_timeout_sec=DROP_TIMEOUT_SEC,
             restore_interval_sec=RESTORE_INTERVAL_SEC,
             max_restore_attempts=MAX_RESTORE_ATTEMPTS,
             samples_per_packet=960,        # 20 ms at 48 kHz
