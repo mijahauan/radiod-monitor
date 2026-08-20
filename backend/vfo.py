@@ -40,7 +40,7 @@ instead of the station the user asked for.
 import asyncio
 import logging
 import time
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from ka9q import RadiodStream, StreamQuality, discover_channels
 from ka9q.types import Encoding
@@ -162,10 +162,11 @@ class Vfo:
         self.settle_sec = settle_sec
         self.flush_sec = flush_sec
         self.ssrc: Optional[int] = None
-        # preset -> SSRC. One channel per preset, each created once and only
-        # retuned, so nothing is ever removed mid-session and no re-creation
-        # can land inside radiod's purge. See _ensure_channel_exists.
-        self._by_preset: Dict[tuple, int] = {}
+        # The frequency the current channel was CREATED at, which is not
+        # self.freq_hz -- tune() sets that to the requested frequency before
+        # the channel work starts. wfm channels are only reusable at the
+        # frequency they were born on, so the distinction is load-bearing.
+        self._channel_freq_hz: Optional[float] = None
         self.freq_hz: Optional[float] = None
         self.preset: Optional[str] = None
         self.sample_rate: Optional[int] = None
@@ -317,87 +318,58 @@ class Vfo:
         for q in self.listeners:
             put_control(q, msg)
 
+    def can_reuse(self, freq_hz: float, preset: str) -> bool:
+        """Whether the channel we hold can serve this station as it stands.
+
+        A narrowband preset retunes freely; `wfm` only works on the frequency
+        it was created for (see RECREATE_ON_RETUNE). The caller needs this
+        BEFORE the tune begins, because it decides when the window is centred:
+        a channel about to be CREATED must be born inside a window that
+        already covers it, while a channel being RETUNED must be centred
+        afterwards.
+        """
+        if self.ssrc is None or self.preset != preset:
+            return False
+        return (preset not in RECREATE_ON_RETUNE
+                or self._channel_freq_hz == freq_hz)
+
     def _ensure_channel_exists(self, freq_hz: float, preset: str,
                                sample_rate: int) -> bool:
-        """Make sure `self.ssrc` names a channel radiod currently has.
+        """Make `self.ssrc` name a live channel serving `freq_hz`/`preset`.
 
-        Returns True if a NEW channel was created (the caller must then point
-        a new stream at it). Three cases, in order of cost:
+        Returns True when the channel changed, so the caller repoints the
+        stream at it.
 
-          1. We already hold an SSRC radiod still knows -- nothing to do.
-          2. A channel is sitting on our destination from a previous run of
-             this app -- adopt it. Adopting is strictly better than removing
-             and re-creating, which would start the purge we exist to avoid.
-             This is only safe because the VFO has a destination to itself:
-             on the shared group the scan matched sensors and the front-end
-             probe's throwaway channel too, so it would adopt an arbitrary
-             station's channel, or one radiod was still purging -- a dead
-             channel, the precise failure this design exists to eliminate.
-             The destination alone does not rule out the "still purging"
-             case, though: radiod reaps a channel only once its frequency
-             reads zero, so a channel mid-purge on OUR OWN destination (an
-             app restart landing inside the ~20 s window `close()` starts,
-             which `reload=True` makes routine in development) still answers
-             discovery right up until it is reaped. `frequency != 0` below
-             is the same freshness gate the sensor reuse path in
-             `radio_controller.py` uses for exactly this reason.
-          3. Nothing there -- create one and keep whatever SSRC the library
-             allocates.
+        **One channel. Never two.** Every channel shares the receiver's single
+        front-end window, and a channel live anywhere else in the spectrum
+        stops the window being placed for the station the listener picked.
+        Measured, one channel each:
+
+            nfm 162.400 alone                  LO 162.4000  snr 8.51  251 frames
+            fresh wfm 91.300, nfm still alive  LO  91.5192  snr None    0 frames
+
+        91.5192 is 219.2 kHz off target -- radiod edge-parked the wfm channel
+        instead of centring it. Removing the other channel afterwards does not
+        repair it, because nothing re-runs placement. So the previous channel
+        goes before the new one arrives.
+
+        Retune when it is safe, replace when it is not:
+
+        * A narrowband preset retunes freely. nfm crosses the NWR band all day
+          and keeps working, and a retune costs one command with no channel
+          lifecycle at all -- which is what makes station switching 0.1 s.
+        * `wfm` cannot be retuned. Measured on one channel: fresh at 91.300
+          gave snr 19.29 and 251 frames in 5 s; retuned to 93.900, 0 frames;
+          retuned BACK to 91.300 -- the frequency where it had just worked,
+          window on it -- still 0 frames. It dies on the first retune wherever
+          it is pointed, so every FM station gets a new channel.
         """
-        # ONE CHANNEL PER PRESET, each created once and thereafter only
-        # retuned. Two measurements force this shape.
-        #
-        # First, changing a live channel's preset does not start the new
-        # demodulator: a channel taken from nfm@162.400 to wfm@91.300 with the
-        # window correctly centred (IF +0.0 kHz) produced 0 frames in 25 s and
-        # no SNR, while a fresh wfm channel on the same frequency gave 501
-        # frames in 10 s, snr 18.6, first frame at 0.20 s. So a mode change
-        # cannot reuse the channel.
-        #
-        # Second, removing the old one and creating a new one -- which looked
-        # safe, since `preset` is an input to the SSRC hash, so the two have
-        # different SSRCs -- fails as soon as the user switches BACK. A session
-        # alternating NWS and FM cycles between exactly two SSRCs, and each
-        # re-creation lands inside the ~20 s purge radiod started when that
-        # same SSRC was removed a moment earlier. Observed directly: the VFO
-        # alternating between 1073068374 (nfm) and 588263454 (wfm), with FM
-        # playing on one switch and silent on the next.
-        #
-        # Keeping a channel per preset removes the operation that starts a
-        # purge. Nothing is ever destroyed mid-session, so nothing can be
-        # re-created into a corpse, and switching back to a mode reuses a
-        # channel that has been alive all along. The cost is one idle
-        # demodulator per preset the session has visited -- at most three or
-        # four -- and `close()` sweeps them all at shutdown.
-        # A wfm channel is keyed by station as well as preset, because it
-        # cannot be retuned (see RECREATE_ON_RETUNE); everything else is keyed
-        # by preset alone and retuned freely within its band.
-        key = (preset, freq_hz) if preset in RECREATE_ON_RETUNE else (preset,)
-
-        held = self._by_preset.get(key)
-        if held is not None:
-            if self.control.poll_channel(held, timeout=2.0) is not None:
-                changed = (held != self.ssrc)
-                self.ssrc = held
-                self.preset = preset
-                return changed
-            # radiod forgot it (a restart); fall through and make a new one.
-            self._by_preset.pop(key, None)
-            if self.ssrc == held:
-                self.ssrc = None
-
-        if self.preset not in (None, preset) or preset in RECREATE_ON_RETUNE:
-            # Either we are moving to a different preset's channel, or this
-            # preset needs one per station and the lookup above just told us
-            # we have none for THIS station. Either way the channel we are
-            # currently holding is not the one to use.
-            self.ssrc = None
-
-        if self.ssrc is not None:
+        # 1. Can we keep what we have?
+        if self.can_reuse(freq_hz, preset):
             if self.control.poll_channel(self.ssrc, timeout=2.0) is not None:
                 return False
             # One dropped status reply reads exactly like a radiod restart --
-            # confirm with a second poll before tearing the VFO down.
+            # confirm before tearing anything down.
             if self.control.poll_channel(self.ssrc, timeout=2.0) is not None:
                 return False
             logger.warning(
@@ -407,58 +379,74 @@ class Vfo:
             self.ssrc = None
             self.preset = None
 
-        try:
-            # discover_channels always returns Dict[SSRC, ChannelInfo]
-            # (ka9q/discovery.py); every path goes through the same dict
-            # constructor, so no defensive isinstance check is needed here.
-            # listen_duration's ~2 s default only costs this establish path,
-            # never a routine retune (self.ssrc is already set by then).
-            found = discover_channels(self.control.status_address)
-            dest_ip = self.destination.split(":")[0]
-            existing = [
-                ch for ch in found.values()
-                if dest_ip in (ch.multicast_address or "")
-                and (ch.frequency or 0.0) != 0.0
-            ]
-        except Exception as e:
-            logger.debug(f"vfo adopt scan: {e}")
-            existing = []
-        # Adopt only a channel already on the preset we want. A preset command
-        # does not start a demodulator (see the top of this method), so
-        # adopting one on the wrong preset and trying to convert it is a dead
-        # end -- creating is the only way to get a working demod for a preset.
-        matching = [ch for ch in existing
-                    if (getattr(ch, "preset", None) or "").lower() == preset.lower()]
-        if matching:
-            self.ssrc = matching[0].ssrc
-            self.preset = preset
-            self._by_preset[key] = self.ssrc
-            logger.info(
-                f"Adopted existing {preset} channel SSRC {self.ssrc} as the VFO"
-            )
-            return True
+        # 2. Anything still on our group has to go before the new channel is
+        #    created, or it will fight the window. This includes the channel
+        #    we were just using.
+        self._drop_our_channels()
 
-        # radiod hands back a channel it is still reaping if the same
-        # deterministic SSRC was removed inside the last ~20 s. It answers
-        # status, but its frequency reads zero and it never emits RTP, so the
-        # symptom is a station that silently fails to play. Check for it here
-        # rather than letting the tune time out with no explanation.
+        # 3. Create the one channel. The library allocates its SSRC; this app
+        #    never chooses or derives one.
         self.ssrc = self.control.create_channel(
             frequency_hz=freq_hz, preset=preset, sample_rate=sample_rate,
             gain=0.0, destination=self.destination, encoding=Encoding.OPUS,
         )
         self.preset = preset
-        self._by_preset[key] = self.ssrc
+        self._channel_freq_hz = freq_hz
         born = self.control.poll_channel(self.ssrc, timeout=2.0)
         if born is not None and (getattr(born, "frequency", None) or 0) == 0:
+            # radiod hands back a channel it is still reaping if this SSRC was
+            # removed inside the last ~20 s. It answers status, but its
+            # frequency reads zero and it never emits RTP. Measured: the same
+            # SSRC re-created at +2 s and +10 s gave 0 frames; at +25 s it gave
+            # snr 19.07 and 201 frames.
             logger.warning(
                 f"radiod returned SSRC {self.ssrc} with frequency 0 -- it is "
-                f"still purging a channel with this SSRC, so it will not "
-                f"stream. Something removed the VFO's channel within the last "
-                f"~20 s; release_idle deliberately does not."
+                f"still purging a channel with this SSRC and will not stream. "
+                f"Re-creating a channel for a station left less than ~20 s ago."
             )
         logger.info(f"Created the VFO: SSRC {self.ssrc} on {self.destination}")
         return True
+
+    def _drop_our_channels(self):
+        """Clear the spectrum for a new channel: our own, and the anchor.
+
+        The anchor counts. It is a real channel sitting `half_span` from
+        whatever station it last centred, so during a band change it is still
+        in the OLD band while the new channel is being created -- and a live
+        channel elsewhere in the spectrum is exactly what stops the window
+        being placed (LO 91.5192 instead of 91.3000, the wfm channel
+        edge-parked rather than centred). `centre_on` builds a fresh anchor in
+        the right band immediately afterwards.
+
+        Fire-and-forget: radiod reaps them on its own schedule. Nothing is
+        re-created in this pass at the same frequency and preset, so the
+        removed and created SSRCs are disjoint -- except when a listener
+        returns to a station they left seconds ago, which the frequency-0
+        check above reports.
+        """
+        dest_ip = self.destination.split(":")[0]
+        try:
+            found = discover_channels(self.control.status_address)
+        except Exception as e:
+            logger.debug(f"vfo sweep: {e}")
+            found = {}
+        ours = [s for s, ch in found.items()
+                if dest_ip in (getattr(ch, "multicast_address", "") or "")]
+        if self.ssrc is not None and self.ssrc not in ours:
+            ours.append(self.ssrc)
+        for ssrc in ours:
+            try:
+                self.control.remove_channel(ssrc)
+            except Exception as e:
+                logger.debug(f"vfo sweep: remove {ssrc}: {e}")
+        try:
+            self.window.release(self.control)
+        except Exception as e:
+            logger.debug(f"vfo sweep: anchor release: {e}")
+        self.ssrc = None
+        self.preset = None
+        self._channel_freq_hz = None
+
 
     def _tune_once(self, freq_hz: float, preset: str, sample_rate: int,
                    restart_demod: bool) -> None:
@@ -503,6 +491,31 @@ class Vfo:
             raise RuntimeError("no connection to radiod")
 
         # 1. Make sure the channel exists.
+        # WHEN the window is centred depends on whether a channel is about to
+        # be born or merely retuned, and the two are opposites.
+        #
+        # A channel being CREATED must be born inside a window that already
+        # covers it. radiod places a new channel against the window as it
+        # stands, and a wfm demodulator that starts edge-parked never
+        # recovers -- centring afterwards does not repair it, because nothing
+        # re-runs placement. Measured: create-then-centre left the LO at
+        # 91.5192 for a 91.300 station (219.2 kHz off, the edge-park
+        # position) and produced no audio, while centre-then-create gave
+        # snr 19.29 and 251 frames in 5 s.
+        #
+        # A channel being RETUNED is the opposite: `set_preset` restarts the
+        # demodulator and `wfm.c` re-runs `set_freq` at demod start, which
+        # re-parks it and drags the LO off anything centred beforehand.
+        # Measured over three runs each, retuning 162.400 nfm -> 102.300 wfm:
+        # centre-first gave IF -219.2 kHz every time, centre-last +0.0 kHz.
+        reusing = self.can_reuse(freq_hz, preset)
+        if not reusing:
+            self._drop_our_channels()
+            self._centred = self.window.centre_on(
+                self.control, freq_hz, self.anchor_destination,
+                sample_rate, ssrc_hint=None,
+            )
+
         fresh = self._ensure_channel_exists(freq_hz, preset, sample_rate)
         if fresh and self._stream is not None:
             # The old stream is following an SSRC that no longer exists.
@@ -515,33 +528,6 @@ class Vfo:
         # 2. Frequency first...
         self.control.set_frequency(self.ssrc, freq_hz)
 
-        # ...and drag the other presets' channels along. They are idle, but
-        # they are not free: every channel shares one front-end window, and a
-        # channel left in the band we came from fights the one we are going
-        # to. Measured with seven live NWS channels at 162 MHz and the VFO on
-        # 91.300 MHz FM: 0 frames in 6 s even though the window had moved
-        # correctly (LO 91.3000, IF +0.0). One stranded channel does the same.
-        # Parking them on the current frequency keeps every channel inside the
-        # window and costs a demodulator that nobody listens to.
-        for other_key, other_ssrc in list(self._by_preset.items()):
-            if other_ssrc == self.ssrc:
-                continue
-            if other_key[0] in RECREATE_ON_RETUNE:
-                # Cannot be parked: retuning it is exactly what kills it, and
-                # a dead channel left on its old frequency still holds part of
-                # the window. Drop it. Its SSRC includes the station, so
-                # coming back to that station creates a distinct one rather
-                # than re-creating this one into its own purge.
-                try:
-                    self.control.remove_channel(other_ssrc)
-                except Exception as e:
-                    logger.debug(f"dropping {other_key} channel: {e}")
-                self._by_preset.pop(other_key, None)
-                continue
-            try:
-                self.control.set_frequency(other_ssrc, freq_hz)
-            except Exception as e:
-                logger.debug(f"parking {other_key} channel: {e}")
         # 3. ...then the preset, which restarts the demodulator in place --
         # which is also the retry, and is why the retry never destroys the VFO.
         if preset != self.preset or restart_demod:
@@ -556,16 +542,14 @@ class Vfo:
         except Exception as e:
             logger.debug(f"vfo squelch: {e}")
 
-        # 5. Centre LAST -- see this method's docstring. The anchor that does
-        # the centring lives on its own destination, never the VFO's, so a
-        # later adopt scan can never mistake it for the VFO. With
-        # ssrc_hint=None (the session's first tune) centre_on takes its own
-        # deadlock-breaking path, so it does not need the VFO channel to
-        # exist -- but by this point it always does.
-        self._centred = self.window.centre_on(
-            self.control, freq_hz, self.anchor_destination,
-            sample_rate, ssrc_hint=self.ssrc,
-        )
+        # 5. Centre AFTER a retune only -- a newly created channel was already
+        # centred before it was born, and re-centring here would move the LO
+        # under a demodulator that has just started.
+        if reusing:
+            self._centred = self.window.centre_on(
+                self.control, freq_hz, self.anchor_destination,
+                sample_rate, ssrc_hint=self.ssrc,
+            )
 
     async def _start_stream(self) -> None:
         """Attach a RadiodStream to the VFO's SSRC.

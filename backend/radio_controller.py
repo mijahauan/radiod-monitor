@@ -219,12 +219,15 @@ class RadioController:
         logger.info(f"Squelch threshold set to {self.squelch_threshold} dB")
         if not self.control:
             return
-        kwargs = self._squelch_args()
-        for ssrc in list(self.active_channels):
-            try:
-                self.control.set_squelch(ssrc, **kwargs)
-            except Exception as e:
-                logger.warning(f"Failed to update squelch on SSRC {ssrc:08x}: {e}")
+        # There is exactly one channel to apply it to: the VFO. It is also
+        # re-applied on every tune, so this only matters while one is playing.
+        ssrc = self.vfo.ssrc
+        if ssrc is None:
+            return
+        try:
+            self.control.set_squelch(ssrc, **self._squelch_args())
+        except Exception as e:
+            logger.warning(f"Failed to update squelch on SSRC {ssrc:08x}: {e}")
 
     def apply_stations(
         self,
@@ -235,238 +238,76 @@ class RadioController:
         sample_rate: int = 48000,
         on_removals_done=None,
     ):
+        """Record what the user is looking at. Create nothing.
+
+        This used to build one radiod channel per station so the map could
+        show live SNR. On a receiver with a 660 kHz window that was never
+        going to work for a band 20 MHz wide, and measurement showed it was
+        actively harmful even when it did fit: while any channel is live in
+        another part of the spectrum, the front end cannot be placed for the
+        station the listener actually picked. Measured, one channel each --
+
+            nfm 162.400 alone                  LO 162.4000  snr 8.51  251 frames
+            fresh wfm 91.300, nfm still alive  LO  91.5192  snr None    0 frames
+
+        -- where 91.5192 is 219.2 kHz off target, radiod having edge-parked the
+        wfm channel instead of centring it. Removing the other channel
+        afterwards does not repair it, because nothing re-runs placement.
+
+        So the VFO is the only channel this app creates. The station list is a
+        directory; clicking a station is what puts a channel on the air. What
+        is lost is the activity map's live SNR, which the hardware could not
+        honestly support in the first place.
         """
-        Converge the radiod channel set to exactly the given stations.
-        Creates missing channels, removes any on our destination whose SSRC
-        is not in the new set, and applies squelch to every channel in the
-        new set. Also removes ghost channels from stale sessions that no
-        longer match expected SSRC values — for example, channels created
-        with different hash inputs or encoding. Re-entrant: updates
-        channels no longer in it. Mutates self.active_channels.
-
-        Serialized with a lock so rapid searches (squelch/radius/mode
-        changes) don't race.
-
-        `on_removals_done` is called from this thread the moment the stale
-        channels are gone, before the new ones are built. That split matters
-        to the audio path. Sensor channels for a band the VFO is not in stop
-        it dead: measured, seven live NWS sensors at 162 MHz with the VFO on
-        91.300 MHz FM produced 0 frames in 6 s even though the window had
-        correctly moved (LO 91.3000, IF +0.0). But making a tune wait for the
-        WHOLE convergence charges the listener for building sensors they are
-        not waiting on -- a switch back to NWS took 14 s. So audio waits for
-        the removals and not a moment longer.
-        """
-        if not self.control:
-            logger.warning("apply_stations: no radiod connection")
-            return
-
-        with self._apply_lock:
-            self._apply_stations_locked(
-                stations, preset, audio_channels, snr_squelch, sample_rate,
-                on_removals_done,
-            )
-
-    def _apply_stations_locked(
-        self,
-        stations: Iterable[Station],
-        preset: str,
-        audio_channels: int,
-        snr_squelch: bool,
-        sample_rate: int,
-        on_removals_done=None,
-    ):
-
         self.preset = preset
         self.audio_channels = audio_channels
         self.snr_squelch_enabled = snr_squelch
         self.sample_rate = sample_rate
+        self.monitored_freqs = {float(st.freq_hz) for st in stations}
+        self.activity_available = False
 
-        new_freqs: set = set()
-        for st in stations:
-            new_freqs.add(float(st.freq_hz))
-        # Published immediately, before any channel exists. The UI offers a
-        # station the moment results arrive, but creating a large station set
-        # takes a while, so validating a Listen against created channels
-        # rejects stations the user can legitimately see and click.
-        self.monitored_freqs = set(new_freqs)
+        if not self.control:
+            logger.warning("apply_stations: no radiod connection")
+            if on_removals_done is not None:
+                on_removals_done()
+            return
 
-        # A set wider than the window cannot be monitored: channels outside it
-        # report snr=-inf and produce no RTP. Rather than create channels that
-        # cannot work, serve the list as a directory and let the audio plane
-        # create the one channel a listener actually asks for.
-        self.activity_available = self.fits_window(new_freqs)
-        if not self.activity_available:
-            logger.info(
-                f"{len(new_freqs)} stations span more than the receiver's "
-                f"window — activity unavailable; the VFO carries whatever the "
-                f"listener selects"
-            )
-            new_freqs = set()
+        with self._apply_lock:
+            # Sweep anything a previous version of this app (or a previous
+            # run) left on the sensor group. Nothing is created here, so this
+            # is the whole of convergence now.
+            self._sweep_sensor_group()
+            if on_removals_done is not None:
+                try:
+                    on_removals_done()
+                except Exception as e:
+                    logger.debug(f"on_removals_done: {e}")
 
         logger.info(
-            f"Monitoring {len(new_freqs)} frequencies  preset={preset}  "
-            f"dest={self.destination}"
+            f"{len(self.monitored_freqs)} stations listed  preset={preset}  "
+            f"(directory only -- the VFO is the only channel)"
         )
 
-        # Converge by *diffing*, not by wiping and rebuilding.
-        #
-        # The SSRC is a deterministic hash of exactly the parameters that
-        # define a channel (frequency, preset, sample_rate, encoding,
-        # destination, agc, gain, radiod identity), so the SSRC set we want is
-        # computable before talking to radiod at all.  An existing channel
-        # whose SSRC is in that set is correct *by construction* — there is
-        # nothing to reconcile, so it is left completely alone.
-        #
-        # This is what makes the old blocking wait unnecessary.  Wiping
-        # everything first meant immediately re-creating SSRCs that were still
-        # being torn down, and radiod's removal is asynchronous — so the code
-        # had to poll for up to 10 s for freq=0 zombies to disappear before it
-        # dared re-create them, on every single search.  Here the removed set
-        # and the created set are disjoint by definition: an SSRC we keep is
-        # never removed, and an SSRC we remove is never re-created in the same
-        # pass.  Nothing has to be waited on.
-        #
-        # It also stops a search from cutting off audio the user is listening
-        # to: re-searching the same mode now preserves that station's channel
-        # instead of destroying and rebuilding it.
-        desired: dict = {}   # ssrc -> freq_hz
-        for freq_hz in new_freqs:
-            desired[allocate_ssrc(
-                frequency_hz=freq_hz,
-                preset=preset,
-                sample_rate=self.sample_rate,
-                agc=False,           # matches ensure_channel's agc_enable=0
-                gain=0.0,
-                destination=self.destination,
-                encoding=Encoding.OPUS,
-                radiod_host=self.control.status_address,
-            )] = freq_hz
-
-        try:
-            existing = discover_channels(self.radiod_host, 1.0)
-        except Exception as e:
-            logger.warning(f"apply_stations: discover_channels failed: {e}")
-            existing = {}
-
+    def _sweep_sensor_group(self):
+        """Remove any channel on the sensor destination. Should find none."""
+        if not self.control:
+            return
         dest_ip = self.destination.split(":")[0]
-        ours = {
-            ssrc: ch for ssrc, ch in existing.items()
-            if dest_ip in (ch.multicast_address or "")
-        }
-
-        # Remove only what is genuinely stale — channels on our destination
-        # that the new station set does not want.  Fire-and-forget: we never
-        # re-create these SSRCs in this pass, so radiod can purge them on its
-        # own schedule while we get on with creating the new ones.
-        for ssrc, ch in ours.items():
-            if ssrc in desired:
-                continue
-            # The VFO and the anchor are exempt STRUCTURALLY, not by a check
-            # here: they live on self.vfo_destination and
-            # self.anchor_destination, never on self.destination, so neither
-            # can appear in `ours` at all. There was an `ssrc == self.vfo.ssrc`
-            # guard here; it was dead in the only case that mattered (the VFO
-            # sharing this group aliased onto a sensor SSRC, so it was in
-            # `desired` and the guard never ran) and misleading everywhere
-            # else. Do not reintroduce it -- if the VFO is ever swept, the bug
-            # is that it moved back onto this destination.
+        try:
+            found = discover_channels(self.radiod_host, 1.0)
+        except Exception as e:
+            logger.debug(f"sensor sweep: discover failed: {e}")
+            return
+        stale = [s for s, ch in found.items()
+                 if dest_ip in (ch.multicast_address or "")]
+        for ssrc in stale:
             try:
                 self.control.remove_channel(ssrc)
-                logger.info(
-                    f"Removed stale channel SSRC {ssrc:08x} "
-                    f"({ch.frequency/1e6:.3f} MHz)"
-                )
+                logger.info(f"Removed leftover sensor channel SSRC {ssrc:08x}")
             except Exception as e:
-                logger.warning(f"Failed to remove SSRC {ssrc:08x}: {e}")
-
+                logger.debug(f"sensor sweep: remove {ssrc:08x}: {e}")
         self.active_channels.clear()
 
-        # Stale channels are gone; the audio path may tune now (see the
-        # docstring). Everything below only ADDS sensors, which no listener
-        # is waiting on.
-        if on_removals_done is not None:
-            try:
-                on_removals_done()
-            except Exception as e:
-                logger.debug(f"on_removals_done: {e}")
-
-        # Keep the channels that are already right, and skip their round trips.
-        # A channel counts as already right when radiod is serving it at the
-        # expected frequency AND on OPUS — the frequency guards against a
-        # zombie mid-teardown reusing the SSRC, and the encoding against the
-        # preset default having been reasserted underneath us.  Both fields
-        # come from the discovery we already did, so this costs nothing.
-        reused = 0
-        for ssrc, freq_hz in list(desired.items()):
-            ch = ours.get(ssrc)
-            if ch is None:
-                continue
-            if abs((ch.frequency or 0.0) - freq_hz) > 1.0:
-                continue
-            if ch.encoding != Encoding.OPUS:
-                continue
-            self.active_channels[ssrc] = freq_hz
-            desired.pop(ssrc)
-            reused += 1
-            try:
-                self.control.set_squelch(ssrc, **self._squelch_args())
-            except Exception as sq_err:
-                logger.warning(f"Failed to set squelch on SSRC {ssrc:08x}: {sq_err}")
-
-        if reused:
-            logger.info(
-                f"Reused {reused} existing channel(s); "
-                f"creating {len(desired)}"
-            )
-
-        # Create only the frequencies that are actually missing
-        for freq_hz in desired.values():
-            try:
-                channel = self.control.ensure_channel(
-                    frequency_hz=freq_hz,
-                    preset=preset,
-                    sample_rate=self.sample_rate,
-                    gain=0.0,
-                    destination=self.destination,
-                    encoding=Encoding.OPUS,
-                    timeout=5.0,
-                    lifetime=CHANNEL_LIFETIME_FRAMES,
-                )
-                ssrc = channel.ssrc
-                self.active_channels[ssrc] = freq_hz
-
-                # radiod applies the preset's default output encoding on
-                # create and honours OPUS only from a follow-up
-                # OUTPUT_ENCODING command.  Without this the channel serves
-                # s16be while the audio plane advertises Opus.
-                #
-                # Asserted but deliberately NOT verified here: verify_channel()
-                # costs a full discover_channels() poll, and a search creates
-                # one channel per station -- nine of them for NWS -- which adds
-                # seconds to every search for a check that does not gate
-                # anything on this path.  These are sensor channels; no audio
-                # is ever decoded from them.  The VFO (backend/vfo.py) is the
-                # only channel whose bytes reach a decoder, and it re-asserts
-                # OUTPUT_ENCODING = OPUS on every tune -- see Vfo._tune_once.
-                try:
-                    self.control.set_output_encoding(ssrc, Encoding.OPUS)
-                except Exception as enc_err:
-                    logger.warning(
-                        f"Failed to assert OPUS on SSRC {ssrc:08x}: {enc_err}"
-                    )
-
-                try:
-                    self.control.set_squelch(ssrc, **self._squelch_args())
-                except Exception as sq_err:
-                    logger.warning(f"Failed to set squelch on SSRC {ssrc:08x}: {sq_err}")
-
-                logger.info(
-                    f"Channel SSRC {ssrc:08x} ready: {freq_hz/1e6:.3f} MHz → "
-                    f"{channel.multicast_address}:{channel.port}"
-                )
-            except Exception as e:
-                logger.error(f"Failed to ensure channel for {freq_hz/1e6:.3f} MHz: {e}")
 
     async def release_idle(self):
         """Give the radio back when nobody is using the app.
@@ -477,8 +318,8 @@ class RadioController:
         of this radiod. Sensor channels are just as pointless with no control
         socket connected to receive the activity they measure.
 
-        This is not `close()`: the controller stays connected and the next
-        search rebuilds in about a second.
+        This is not `close()`: the controller stays connected, and since the
+        VFO is the only channel this app creates there is nothing to rebuild.
 
         The VFO's channel is deliberately NOT removed, and that is the whole
         subtlety. An earlier version of this method did remove it and forget
@@ -502,22 +343,14 @@ class RadioController:
         except Exception as e:
             logger.debug(f"release_idle: vfo stop: {e}")
 
-        ssrcs = set(self.active_channels)
-        for ssrc in ssrcs:
-            try:
-                await asyncio.to_thread(self.control.remove_channel, ssrc)
-            except Exception as e:
-                logger.debug(f"release_idle: remove {ssrc:08x}: {e}")
-        self.active_channels.clear()
         self.monitored_freqs = set()
         try:
             await asyncio.to_thread(self.window.release, self.control)
         except Exception as e:
             logger.debug(f"release_idle: window release: {e}")
         logger.info(
-            f"Idle: released {len(ssrcs)} sensor channels and the anchor; "
-            f"the VFO channel stays (removing it would start a purge the next "
-            f"tune could land inside)"
+            "Idle: dropped the anchor; the VFO channel stays (removing it "
+            "would start a purge the next tune could land inside)"
         )
 
     async def close(self):

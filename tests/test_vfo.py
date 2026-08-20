@@ -161,24 +161,6 @@ def test_the_ssrc_is_the_one_the_library_allocated(monkeypatch):
     assert v.ssrc in c.known
 
 
-def test_tune_centres_the_window_after_setting_frequency(monkeypatch):
-    """Centre LAST. Measured on the HF+ retuning 162.400 nfm -> 102.300 wfm,
-    three runs each: centring first gives IF -219.2 kHz every time (radiod's
-    edge-parking position for wfm), centring last gives IF +0.0 kHz every
-    time. set_preset restarts the demod and wfm.c re-runs set_freq at demod
-    start, which re-parks the channel and drags the LO off whatever we had
-    centred; nothing re-runs set_freq after the preset, so centring there
-    holds."""
-    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
-    c, v = make()
-    asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
-    names = [x[0] for x in c.calls]
-    assert "centre_on" in names and "set_frequency" in names
-    assert names.index("set_frequency") < names.index("centre_on"), (
-        "centring before the preset restart does not survive it"
-    )
-
-
 def test_anchor_and_vfo_use_different_destinations(monkeypatch):
     """The anchor carries no audio; adopting it as the VFO breaks centring."""
     monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
@@ -209,23 +191,6 @@ def test_second_tune_does_not_create_a_channel(monkeypatch):
         "the receiver down per tune was measured and made 162.400 MHz stop "
         "producing frames entirely"
     )
-
-
-def test_a_narrowband_channel_survives_a_mode_change(monkeypatch):
-    """The nfm channel is kept across a switch to FM and back, so returning to
-    NWS reuses a channel that has been alive all along rather than re-creating
-    one into radiod's ~20 s purge. Only the wfm channel is dropped, because it
-    cannot be parked -- retuning it is what kills it."""
-    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
-    c, v = make()
-    asyncio.run(v.tune(162_400_000.0, "nfm", 48000))
-    nfm_ssrc = v.ssrc
-    asyncio.run(v.tune(91_300_000.0, "wfm", 48000))
-    assert v.ssrc != nfm_ssrc
-    c.calls.clear()
-    asyncio.run(v.tune(162_450_000.0, "nfm", 48000))
-    assert v.ssrc == nfm_ssrc, "the nfm channel was never destroyed"
-    assert not any(x[0] == "create_channel" for x in c.calls)
 
 
 def test_a_station_change_within_a_mode_is_still_a_retune(monkeypatch):
@@ -278,26 +243,6 @@ def test_tune_never_removes_the_vfo_channel(monkeypatch):
     )
 
 
-def test_an_existing_channel_on_the_vfo_destination_is_adopted(monkeypatch):
-    """Surviving a restart of THIS app, not of radiod.
-
-    The VFO's group holds the VFO and nothing else, so a channel found there
-    IS the VFO and adopting it beats removing and re-creating (which starts
-    radiod's ~20 s purge).
-    """
-    left_behind = FakeChannelInfo(0x9999, multicast_address="239.1.2.3")
-    monkeypatch.setattr(vfo_mod, "discover_channels",
-                        lambda *a, **k: {left_behind.ssrc: left_behind})
-    c = FakeControl(known={0x9999})
-    v = FakeVfo(control=c, window=FakeWindow(), destination="239.1.2.3",
-                anchor_destination="239.9.9.9", settle_sec=0.01, flush_sec=0.0)
-    asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
-    assert v.ssrc == 0x9999
-    assert not any(x[0] == "create_channel" for x in c.calls), (
-        "a channel already on the VFO's destination IS the VFO -- adopt it"
-    )
-
-
 def test_channels_on_other_groups_are_never_adopted(monkeypatch):
     """The blocker, from the VFO's side.
 
@@ -319,23 +264,6 @@ def test_channels_on_other_groups_are_never_adopted(monkeypatch):
     created = [x for x in c.calls if x[0] == "create_channel"]
     assert len(created) == 1, "nothing on our group -- create one"
     assert created[0][3] == "239.1.2.3"
-
-
-def test_a_dying_channel_on_our_group_is_skipped_for_a_live_one(monkeypatch):
-    """radiod reaps a channel only once its frequency reads zero, so a
-    channel mid-purge on our OWN destination -- an app restart landing
-    inside the ~20 s window close() starts -- still answers discovery.
-    Adopting it hands the VFO a corpse, the exact failure this design
-    exists to remove. A live channel on the same group must win instead."""
-    dying = FakeChannelInfo(0x4444, freq=0.0, multicast_address="239.1.2.3")
-    live = FakeChannelInfo(0x5555, freq=91_300_000.0, multicast_address="239.1.2.3")
-    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {
-        ch.ssrc: ch for ch in (dying, live)
-    })
-    c, v = make()
-    asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
-    assert v.ssrc == 0x5555, "the live channel must be adopted, not the corpse"
-    assert not any(x[0] == "create_channel" for x in c.calls)
 
 
 def test_only_a_dying_channel_on_our_group_forces_a_fresh_create(monkeypatch):
@@ -505,19 +433,6 @@ def test_stop_releases_the_window_anchor():
 # window edge produces plausible fragments of audio, which is exactly the
 # failure mode this project has already been burned by.
 # ---------------------------------------------------------------------------
-def test_the_window_is_centred_after_the_channel_exists(monkeypatch):
-    """The anchor's whole purpose is to rescue a channel radiod has ALREADY
-    parked at the window edge, by moving the LO onto it so every channel
-    recalculates its IF against the new LO. CLAUDE.md's original measurement
-    (IF +219.2 / snr -inf / ~17 frames per 10 s before the anchor, IF +0.0 /
-    snr 6.5 / 500 frames after) is a description of exactly this order."""
-    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
-    c, v = make()
-    asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
-    names = [x[0] for x in c.calls]
-    assert names.index("create_channel") < names.index("centre_on")
-
-
 def test_the_retry_reissues_the_preset_after_the_frequency(monkeypatch):
     """A preset command is now only used as the RETRY -- it restarts the
     demodulator in place without destroying the channel. It must still come
@@ -539,21 +454,6 @@ def test_the_retry_reissues_the_preset_after_the_frequency(monkeypatch):
     assert names.index("set_frequency") < names.index("set_preset")
 
 
-def test_the_full_tune_order_is_create_frequency_preset_then_centre(monkeypatch):
-    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
-    c, v = make()
-    asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
-    names = [x[0] for x in c.calls]
-    ordered = [n for n in names
-               if n in ("centre_on", "create_channel", "set_frequency",
-                        "set_output_encoding")]
-    assert ordered == ["create_channel", "set_frequency",
-                       "set_output_encoding", "centre_on"]
-
-
-# ---------------------------------------------------------------------------
-# radiod-side failures during a tune
-# ---------------------------------------------------------------------------
 def test_a_radiod_error_during_a_tune_becomes_nosignal(monkeypatch):
     """It must not propagate: the caller is one of two tasks sharing the audio
     WebSocket, so an escaping exception tears the socket down and the browser
@@ -569,8 +469,7 @@ def test_a_radiod_error_during_a_tune_becomes_nosignal(monkeypatch):
     assert result["freq_hz"] == 102_300_000.0
     assert "Not connected to radiod" in result["reason"]
     assert q.get_nowait() == result
-    assert [x for x in c.calls if x[0] == "centre_on"] == [], (
-        "the channel never came up, so there is nothing to centre on"
+    assert len([x for x in c.calls if x[0] == "centre_on"]) == 1, ( "the window is centred before the channel is created, so that call happens before the failure"
     )
     assert len([x for x in c.calls if x[0] == "create_channel:raised"]) == 1, (
         "reported and stopped -- not retried in a loop"
@@ -707,45 +606,97 @@ def test_in_flight_frames_from_the_previous_station_do_not_count(monkeypatch):
     )
 
 
-def test_idle_preset_channels_are_parked_on_the_current_frequency(monkeypatch):
-    """A channel left in the band we came from fights the one we are going to.
+def test_a_mode_change_removes_the_old_channel_before_creating(monkeypatch):
+    """Every channel shares the receiver's single front-end window, and a
+    channel live elsewhere in the spectrum stops the window being placed for
+    the station the listener picked. Measured, one channel each:
 
-    Every channel shares one front-end window. Measured with seven live NWS
-    channels at 162 MHz and the VFO on 91.300 MHz FM: 0 frames in 6 s despite
-    the window having moved correctly (LO 91.3000, IF +0.0). The VFO's own
-    idle per-preset channels do the same thing, so they ride along.
+        nfm 162.400 alone                  LO 162.4000  snr 8.51  251 frames
+        fresh wfm 91.300, nfm still alive  LO  91.5192  snr None    0 frames
+
+    91.5192 is 219.2 kHz off target -- radiod edge-parked the wfm channel
+    rather than centring it.
     """
     monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
     c, v = make()
     asyncio.run(v.tune(162_400_000.0, "nfm", 48000))
-    nfm_ssrc = v.ssrc
+    first = v.ssrc
     c.calls.clear()
     asyncio.run(v.tune(91_300_000.0, "wfm", 48000))
-    retuned = [x[1] for x in c.calls if x[0] == "set_frequency"]
-    assert retuned.count(91_300_000.0) >= 2, (
-        "both the active wfm channel and the idle nfm one move to 91.300"
+    names = [x[0] for x in c.calls]
+    assert "remove_channel" in names and "create_channel" in names
+    assert names.index("remove_channel") < names.index("create_channel"), (
+        "the old channel goes before the new one arrives, or they fight"
     )
-    assert not any(x[0] == "remove_channel" for x in c.calls), (
-        "an nfm channel is parked, not dropped -- it survives retuning"
-    )
-    assert v.ssrc != nfm_ssrc
+    assert v.ssrc != first
 
 
-def test_a_wfm_channel_is_replaced_per_station_never_retuned(monkeypatch):
-    """wfm.c does not survive a frequency change. Measured on one channel,
-    window verified by LO on every reading: fresh at 91.300 gave snr 19.29 and
-    251 frames in 5 s; retuned to 93.900, 0 frames; retuned BACK to 91.300 --
-    the frequency where it had just worked -- still 0 frames. So each FM
-    station gets its own channel, and its SSRC includes the frequency, so
-    returning to a station cannot re-create a channel into its own purge.
-    """
+def test_a_wfm_station_change_replaces_the_channel(monkeypatch):
+    """wfm dies on its first retune, wherever it is pointed. Measured on one
+    channel: fresh at 91.300 gave snr 19.29 and 251 frames in 5 s; retuned to
+    93.900, 0 frames; retuned BACK to 91.300 -- where it had just worked, with
+    the window on it -- still 0 frames."""
     monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
     c, v = make()
     asyncio.run(v.tune(91_300_000.0, "wfm", 48000))
-    first = v.ssrc
     c.calls.clear()
     asyncio.run(v.tune(93_900_000.0, "wfm", 48000))
-    assert v.ssrc != first, "a different station means a different channel"
-    assert any(x[0] == "create_channel" for x in c.calls)
-    assert not any(x[0] == "set_frequency" and x[1] == 93_900_000.0
-                   and x[1] == first for x in c.calls)
+    assert any(x[0] == "create_channel" for x in c.calls), (
+        "a new FM station gets a new channel, never a retune"
+    )
+
+
+def test_a_narrowband_station_change_is_a_retune(monkeypatch):
+    """The fast path, and the reason switching is 0.1 s: no channel lifecycle
+    at all, just one frequency command."""
+    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
+    c, v = make()
+    asyncio.run(v.tune(162_400_000.0, "nfm", 48000))
+    first = v.ssrc
+    c.calls.clear()
+    asyncio.run(v.tune(162_450_000.0, "nfm", 48000))
+    assert v.ssrc == first
+    assert not any(x[0] in ("create_channel", "remove_channel") for x in c.calls)
+    assert any(x[0] == "set_frequency" for x in c.calls)
+
+
+def test_a_leftover_channel_on_our_group_is_swept_before_creating(monkeypatch):
+    """A previous run of this app can leave one, and it would fight the
+    window exactly as a sensor channel did."""
+    leftover = FakeChannelInfo(0x9999, freq=100e6, multicast_address="239.1.2.3")
+    monkeypatch.setattr(vfo_mod, "discover_channels",
+                        lambda *a, **k: {0x9999: leftover})
+    c = FakeControl(known={0x9999})
+    v = FakeVfo(control=c, window=FakeWindow(), destination="239.1.2.3",
+                anchor_destination="239.9.9.9", settle_sec=0.01, flush_sec=0.0)
+    asyncio.run(v.tune(91_300_000.0, "wfm", 48000))
+    assert 0x9999 in [x[1] for x in c.calls if x[0] == "remove_channel"]
+    assert v.ssrc != 0x9999
+
+
+def test_a_new_channel_is_born_inside_an_already_centred_window(monkeypatch):
+    """radiod places a new channel against the window as it stands, and a wfm
+    demodulator that starts edge-parked never recovers -- centring afterwards
+    does not repair it, because nothing re-runs placement. Measured:
+    create-then-centre left the LO at 91.5192 for a 91.300 station, 219.2 kHz
+    off and silent; centre-then-create gave snr 19.29 and 251 frames in 5 s."""
+    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
+    c, v = make()
+    asyncio.run(v.tune(91_300_000.0, "wfm", 48000))
+    names = [x[0] for x in c.calls]
+    assert names.index("centre_on") < names.index("create_channel")
+
+
+def test_a_retune_centres_afterwards(monkeypatch):
+    """The opposite case: set_preset restarts the demod and wfm.c re-runs
+    set_freq at demod start, dragging the LO off anything centred first.
+    Measured over three runs each, 162.400 nfm -> 102.300 wfm: centre-first
+    IF -219.2 kHz every time, centre-last +0.0 kHz."""
+    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
+    c, v = make()
+    asyncio.run(v.tune(162_400_000.0, "nfm", 48000))
+    c.calls.clear()
+    asyncio.run(v.tune(162_450_000.0, "nfm", 48000))     # a retune
+    names = [x[0] for x in c.calls]
+    assert "create_channel" not in names
+    assert names.index("set_frequency") < names.index("centre_on")

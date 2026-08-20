@@ -96,39 +96,41 @@ def _schedule_idle_release():
 # Background activity monitor
 # ---------------------------------------------------------------------------
 async def activity_monitor():
-    """Poll radiod for per-channel SNR and broadcast to control WebSockets."""
+    """Report the tuned station's SNR, and where the receiver's window sits.
+
+    This used to poll every sensor channel and paint the map green. There are
+    no sensor channels any more -- the VFO is the only channel this app
+    creates -- so the only SNR that exists is the one the listener is actually
+    hearing, which is the only one this receiver could ever honestly report:
+    a 660 kHz window cannot observe a 20 MHz band, and channels live outside
+    the window prevent the front end being placed for the station that was
+    picked.
+    """
     while True:
         await asyncio.sleep(ACTIVITY_POLL_INTERVAL)
         if not active_websockets:
             continue
         try:
-            if controller.active_channels:
-                channels = await asyncio.to_thread(
-                    discover_channels, controller.radiod_host, 1.0
+            ssrc = controller.vfo.ssrc
+            freq_hz = controller.vfo.freq_hz
+            if ssrc is not None and freq_hz is not None and controller.control:
+                st = await asyncio.to_thread(
+                    controller.control.poll_status, ssrc, 1.0
                 )
-                for ssrc, freq_hz in list(controller.active_channels.items()):
-                    ch = channels.get(ssrc)
-                    if ch is None:
-                        ch = next(
-                            (c for c in channels.values()
-                             if abs(c.frequency - freq_hz) < 100.0),
-                            None,
-                        )
-                    raw_snr = ch.snr if ch is not None else None
-                    if raw_snr is not None and (math.isinf(raw_snr) or math.isnan(raw_snr)):
-                        raw_snr = None
-                    is_active = raw_snr is not None and raw_snr > SNR_ACTIVE_THRESHOLD
-                    msg = {
-                        "type": "activity",
-                        "freq": freq_hz,
-                        "isActive": is_active,
-                        "snr": round(raw_snr, 1) if raw_snr is not None else None,
-                    }
-                    for ws in list(active_websockets):
-                        try:
-                            await ws.send_json(msg)
-                        except Exception:
-                            pass
+                raw_snr = getattr(st, "snr", None) if st is not None else None
+                if raw_snr is not None and (math.isinf(raw_snr) or math.isnan(raw_snr)):
+                    raw_snr = None
+                msg = {
+                    "type": "activity",
+                    "freq": freq_hz,
+                    "isActive": raw_snr is not None and raw_snr > SNR_ACTIVE_THRESHOLD,
+                    "snr": round(raw_snr, 1) if raw_snr is not None else None,
+                }
+                for ws in list(active_websockets):
+                    try:
+                        await ws.send_json(msg)
+                    except Exception:
+                        pass
 
             # The window read/broadcast runs every cycle regardless of
             # whether any channels exist: FrontEndWindow.read() can resolve
@@ -139,11 +141,7 @@ async def activity_monitor():
             # directory mode active_channels is empty by design, and the
             # anchor may not exist until the first Listen -- read() tries
             # its own anchor_ssrc first and falls back to whatever we pass.
-            ssrc_hint = (
-                controller.vfo.ssrc
-                if controller.vfo.ssrc is not None
-                else next(iter(controller.active_channels), None)
-            )
+            ssrc_hint = controller.vfo.ssrc
             window = await asyncio.to_thread(
                 controller.window.read, controller.control, ssrc_hint
             )
@@ -331,7 +329,10 @@ async def _handle_search(websocket: WebSocket, data: Dict[str, Any]):
     # Whether the activity map can mean anything for this set. Computed here
     # rather than read back from apply_stations because results are sent
     # first: the converge task runs in the background.
-    activity_available = controller.fits_window(s.freq_hz for s in stations)
+    # No sensor channels exist, so there is no activity to report for a
+    # station nobody is tuned to. The list is a directory; clicking is what
+    # puts a channel on the air.
+    activity_available = False
 
     # Published synchronously, before the results reach the browser and before
     # _converge is even scheduled. These three fields are what a Listen click
