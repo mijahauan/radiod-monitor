@@ -432,6 +432,15 @@ class Vfo:
         returns to a station they left seconds ago, which the frequency-0
         check above reports.
         """
+        # Nothing of ours exists yet -- the first tune of a session, or the
+        # first after a host switch. Skip discovery entirely: it is a fixed
+        # two-second listen for status multicast, and on this path there is by
+        # definition nothing for it to find. That two seconds was most of the
+        # first tune's delay. Leftovers from previous RUNS are swept once at
+        # connect(), where paying for a long listen is the right trade.
+        if not self._created and self.ssrc is None:
+            return
+
         dest_ip = self.destination.split(":")[0]
         try:
             found = discover_channels(self.control.status_address)

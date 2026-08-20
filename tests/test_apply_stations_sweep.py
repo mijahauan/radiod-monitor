@@ -87,13 +87,16 @@ def test_a_leftover_sensor_channel_is_swept(monkeypatch):
     162.4-162.55 sat there reading 8-9 dB."""
     discovered = {
         0xAAAA: FakeChannel("239.1.2.3", 162_400_000.0),   # sensor group
-        0xBBBB: FakeChannel("239.1.2.4", 91_300_000.0),    # the VFO's own
+        0xBBBB: FakeChannel("239.1.2.4", 91_300_000.0),    # our VFO group
         0xCCCC: FakeChannel("239.9.9.9", 10_000_000.0),    # someone else's
     }
     c = _controller(monkeypatch, discovered)
-    c._sweep_sensor_group(listen=0.0)
+    c._sweep_our_groups(listen=0.0)
     assert 0xAAAA in c.control.removed, "the leftover sensor goes"
-    assert 0xBBBB not in c.control.removed, "the VFO's channel is not ours to sweep"
+    assert 0xBBBB in c.control.removed, (
+        "a channel left on the VFO group by a previous run goes too -- one "
+        "live channel in another band holds the front end there"
+    )
     assert 0xCCCC not in c.control.removed, "another client's channel is untouched"
 
 

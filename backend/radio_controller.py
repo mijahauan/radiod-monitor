@@ -163,10 +163,11 @@ class RadioController:
         self.vfo._channel_freq_hz = None
         self.vfo._created.clear()
 
-        # Clear anything an older version of this app left behind. It creates
-        # no sensor channels now, but one still live in another band holds the
-        # front end there and no anchor can pull it back.
-        await asyncio.to_thread(self._sweep_sensor_group)
+        # Clear anything a previous run left on any of our groups. One live
+        # channel in another band holds the front end there and no anchor can
+        # pull it back. Done once, here, with a long listen -- so the first
+        # tune of a session does not have to pay for a discovery round trip.
+        await asyncio.to_thread(self._sweep_our_groups)
 
     # Threshold used to hold a squelch open that radiod will not let us
     # switch off. Low enough that any demodulated signal clears it.
@@ -293,8 +294,8 @@ class RadioController:
             f"(directory only -- the VFO is the only channel)"
         )
 
-    def _sweep_sensor_group(self, listen: float = 5.0):
-        """Remove anything left on the sensor group by an older version.
+    def _sweep_our_groups(self, listen: float = 5.0):
+        """Remove anything left on ANY of our groups by a previous run.
 
         Run once at connect, with a generous listen. `discover_channels` is a
         fixed-duration listen for status multicast and can simply not hear a
@@ -305,20 +306,22 @@ class RadioController:
         """
         if not self.control:
             return
-        dest_ip = self.destination.split(":")[0]
+        dest_ips = tuple(d.split(":")[0] for d in
+                         (self.destination, self.vfo_destination,
+                          self.anchor_destination))
         try:
             found = discover_channels(self.radiod_host, listen)
         except Exception as e:
-            logger.debug(f"sensor sweep: discover failed: {e}")
+            logger.debug(f"startup sweep: discover failed: {e}")
             return
         stale = [s for s, ch in found.items()
-                 if dest_ip in (ch.multicast_address or "")]
+                 if any(d in (ch.multicast_address or "") for d in dest_ips)]
         for ssrc in stale:
             try:
                 self.control.remove_channel(ssrc)
-                logger.info(f"Removed leftover sensor channel SSRC {ssrc:08x}")
+                logger.info(f"Removed leftover channel SSRC {ssrc:08x}")
             except Exception as e:
-                logger.debug(f"sensor sweep: remove {ssrc:08x}: {e}")
+                logger.debug(f"startup sweep: remove {ssrc:08x}: {e}")
         self.active_channels.clear()
 
 

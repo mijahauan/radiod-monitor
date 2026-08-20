@@ -660,20 +660,6 @@ def test_a_narrowband_station_change_is_a_retune(monkeypatch):
     assert any(x[0] == "set_frequency" for x in c.calls)
 
 
-def test_a_leftover_channel_on_our_group_is_swept_before_creating(monkeypatch):
-    """A previous run of this app can leave one, and it would fight the
-    window exactly as a sensor channel did."""
-    leftover = FakeChannelInfo(0x9999, freq=100e6, multicast_address="239.1.2.3")
-    monkeypatch.setattr(vfo_mod, "discover_channels",
-                        lambda *a, **k: {0x9999: leftover})
-    c = FakeControl(known={0x9999})
-    v = FakeVfo(control=c, window=FakeWindow(), destination="239.1.2.3",
-                anchor_destination="239.9.9.9", settle_sec=0.01, flush_sec=0.0)
-    asyncio.run(v.tune(91_300_000.0, "wfm", 48000))
-    assert 0x9999 in [x[1] for x in c.calls if x[0] == "remove_channel"]
-    assert v.ssrc != 0x9999
-
-
 def test_a_new_channel_is_born_inside_an_already_centred_window(monkeypatch):
     """radiod places a new channel against the window as it stands, and a wfm
     demodulator that starts edge-parked never recovers -- centring afterwards
@@ -700,3 +686,19 @@ def test_a_retune_centres_afterwards(monkeypatch):
     names = [x[0] for x in c.calls]
     assert "create_channel" not in names
     assert names.index("set_frequency") < names.index("centre_on")
+
+
+def test_the_first_tune_does_not_pay_for_a_discovery_listen(monkeypatch):
+    """discover_channels() is a fixed two-second listen for status multicast.
+    On the first tune of a session there is nothing of ours to find, and that
+    two seconds was most of the cold-start delay."""
+    calls = []
+    monkeypatch.setattr(vfo_mod, "discover_channels",
+                        lambda *a, **k: calls.append(1) or {})
+    c, v = make()
+    asyncio.run(v.tune(91_300_000.0, "wfm", 48000))
+    assert calls == [], "nothing of ours exists yet, so nothing to discover"
+    # ...but once we own a channel, the sweep does run.
+    calls.clear()
+    asyncio.run(v.tune(93_900_000.0, "wfm", 48000))
+    assert calls, "a replacement must clear what we already made"
