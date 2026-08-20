@@ -80,14 +80,18 @@ def test_apply_stations_creates_no_channels(monkeypatch):
 
 
 def test_a_leftover_sensor_channel_is_swept(monkeypatch):
-    """A previous version of this app, or a previous run, may have left one."""
+    """A previous version of this app may have left one, and one live channel
+    in another band holds the front end there. Swept once at connect, with a
+    generous listen: discover_channels is a fixed-duration listen for status
+    multicast and a 1.0 s window logged nothing while live nfm channels at
+    162.4-162.55 sat there reading 8-9 dB."""
     discovered = {
         0xAAAA: FakeChannel("239.1.2.3", 162_400_000.0),   # sensor group
         0xBBBB: FakeChannel("239.1.2.4", 91_300_000.0),    # the VFO's own
         0xCCCC: FakeChannel("239.9.9.9", 10_000_000.0),    # someone else's
     }
     c = _controller(monkeypatch, discovered)
-    c.apply_stations([Station(162_400_000.0)], "nfm")
+    c._sweep_sensor_group(listen=0.0)
     assert 0xAAAA in c.control.removed, "the leftover sensor goes"
     assert 0xBBBB not in c.control.removed, "the VFO's channel is not ours to sweep"
     assert 0xCCCC not in c.control.removed, "another client's channel is untouched"

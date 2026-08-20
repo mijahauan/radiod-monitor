@@ -160,6 +160,13 @@ class RadioController:
         self.vfo.control = self.control
         self.vfo.ssrc = None      # an SSRC belongs to one radiod, not to us
         self.vfo.preset = None
+        self.vfo._channel_freq_hz = None
+        self.vfo._created.clear()
+
+        # Clear anything an older version of this app left behind. It creates
+        # no sensor channels now, but one still live in another band holds the
+        # front end there and no anchor can pull it back.
+        await asyncio.to_thread(self._sweep_sensor_group)
 
     # Threshold used to hold a squelch open that radiod will not let us
     # switch off. Low enough that any demodulated signal clears it.
@@ -272,29 +279,35 @@ class RadioController:
                 on_removals_done()
             return
 
-        with self._apply_lock:
-            # Sweep anything a previous version of this app (or a previous
-            # run) left on the sensor group. Nothing is created here, so this
-            # is the whole of convergence now.
-            self._sweep_sensor_group()
-            if on_removals_done is not None:
-                try:
-                    on_removals_done()
-                except Exception as e:
-                    logger.debug(f"on_removals_done: {e}")
+        # Nothing to converge: no channels are created here, so a search is
+        # pure bookkeeping and costs no radiod round trips at all. Leftovers
+        # from older versions are swept once at connect().
+        if on_removals_done is not None:
+            try:
+                on_removals_done()
+            except Exception as e:
+                logger.debug(f"on_removals_done: {e}")
 
         logger.info(
             f"{len(self.monitored_freqs)} stations listed  preset={preset}  "
             f"(directory only -- the VFO is the only channel)"
         )
 
-    def _sweep_sensor_group(self):
-        """Remove any channel on the sensor destination. Should find none."""
+    def _sweep_sensor_group(self, listen: float = 5.0):
+        """Remove anything left on the sensor group by an older version.
+
+        Run once at connect, with a generous listen. `discover_channels` is a
+        fixed-duration listen for status multicast and can simply not hear a
+        channel inside a short window -- a 1.0 s sweep logged nothing while
+        live nfm channels at 162.4-162.55 sat there reading 8-9 dB, holding
+        the front end in the wrong band. Nothing creates these any more, so
+        paying five seconds once at startup is the right trade.
+        """
         if not self.control:
             return
         dest_ip = self.destination.split(":")[0]
         try:
-            found = discover_channels(self.radiod_host, 1.0)
+            found = discover_channels(self.radiod_host, listen)
         except Exception as e:
             logger.debug(f"sensor sweep: discover failed: {e}")
             return

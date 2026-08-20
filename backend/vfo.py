@@ -167,6 +167,13 @@ class Vfo:
         # the channel work starts. wfm channels are only reusable at the
         # frequency they were born on, so the distinction is load-bearing.
         self._channel_freq_hz: Optional[float] = None
+        # Every SSRC this VFO has created. Cleanup must not depend on
+        # discovery: discover_channels() is a fixed-duration listen for status
+        # multicast and can simply not hear a channel inside its window --
+        # observed with live nfm channels at 162.4-162.55 reading 8-9 dB while
+        # the sweep that was meant to remove them logged nothing. Anything we
+        # made, we can remove by name.
+        self._created: set = set()
         self.freq_hz: Optional[float] = None
         self.preset: Optional[str] = None
         self.sample_rate: Optional[int] = None
@@ -392,6 +399,7 @@ class Vfo:
         )
         self.preset = preset
         self._channel_freq_hz = freq_hz
+        self._created.add(self.ssrc)
         born = self.control.poll_channel(self.ssrc, timeout=2.0)
         if born is not None and (getattr(born, "frequency", None) or 0) == 0:
             # radiod hands back a channel it is still reaping if this SSRC was
@@ -430,10 +438,12 @@ class Vfo:
         except Exception as e:
             logger.debug(f"vfo sweep: {e}")
             found = {}
-        ours = [s for s, ch in found.items()
-                if dest_ip in (getattr(ch, "multicast_address", "") or "")]
-        if self.ssrc is not None and self.ssrc not in ours:
-            ours.append(self.ssrc)
+        ours = {s for s, ch in found.items()
+                if dest_ip in (getattr(ch, "multicast_address", "") or "")}
+        # Discovery is a backstop, not the source of truth -- see _created.
+        ours |= self._created
+        if self.ssrc is not None:
+            ours.add(self.ssrc)
         for ssrc in ours:
             try:
                 self.control.remove_channel(ssrc)
@@ -443,6 +453,7 @@ class Vfo:
             self.window.release(self.control)
         except Exception as e:
             logger.debug(f"vfo sweep: anchor release: {e}")
+        self._created.clear()
         self.ssrc = None
         self.preset = None
         self._channel_freq_hz = None

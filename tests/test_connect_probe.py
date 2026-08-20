@@ -50,6 +50,9 @@ def test_connect_probes_the_anchor_group_not_the_sensor_or_vfo_group(monkeypatch
     controller = RadioController(radiod_host="fake-radiod.local")
     fake_control = FakeControl()
     monkeypatch.setattr(rc_mod, "RadiodControl", lambda host: fake_control)
+    # connect() sweeps leftovers from older versions, which listens to status
+    # multicast for several seconds. No test may touch the network.
+    monkeypatch.setattr(rc_mod, "discover_channels", lambda *a, **k: {})
 
     asyncio.run(controller.connect())
 
