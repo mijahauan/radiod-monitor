@@ -300,10 +300,14 @@ class RadioController:
         for ssrc, ch in ours.items():
             if ssrc in desired:
                 continue
-            if ssrc == self.window.anchor_ssrc:
-                # The anchor holds the front end on whatever the listener
-                # chose. It is deliberately not a station, so the diff would
-                # otherwise delete it on every search and un-centre the window.
+            # The anchor is exempt structurally, not by a check here: it
+            # lives on self.anchor_destination (Task 2), never on
+            # self.destination, so it can never appear in `ours` at all.
+            if self.vfo.ssrc is not None and ssrc == self.vfo.ssrc:
+                # The VFO is not a station and is never in `desired`. A search
+                # re-derives the station set; it must not touch the channel the
+                # user is actually listening through, or the next tune lands
+                # inside radiod's ~20 s purge and comes back dead.
                 continue
             try:
                 self.control.remove_channel(ssrc)
