@@ -919,6 +919,7 @@ re-create only when radiod has genuinely forgotten us."
 
 **Files:**
 - Modify: `backend/radio_controller.py`
+- Modify: `backend/app.py` (Step 3 only — the activity monitor's window hint)
 
 **Interfaces:**
 - Consumes: `FrontEndWindow` (Task 1), `Vfo` (Task 2).
@@ -963,7 +964,38 @@ In `close()`, before the destination sweep:
 The existing sweep then removes the VFO's channel and the anchor along with
 the sensors, which is correct at shutdown: nothing will be re-created.
 
-- [ ] **Step 3: Verify the app still imports and starts**
+- [ ] **Step 3: Give the activity monitor an SSRC it can always poll**
+
+**Files:** also modify `backend/app.py`.
+
+`activity_monitor()` reads the window every cycle so the frequency strip can
+draw it, and `FrontEndWindow.read()` needs some SSRC to poll `first_lo` from.
+Today the hint is `next(iter(controller.active_channels), None)`. In directory
+mode — the whole FM band, where no set fits the window — `active_channels` is
+permanently empty, so the hint is permanently `None` and **no `{"type":
+"window"}` message is ever sent**. The strip then shows stations with no window
+on the one source that most needs it.
+
+The VFO closes this: it outlives every search and its SSRC is valid the moment
+it exists. Change the hint to prefer it:
+
+```python
+            # The VFO outlives searches, so it is the reliable hint. In
+            # directory mode active_channels is empty by design, and the
+            # anchor may not exist until the first Listen -- read() tries
+            # its own anchor_ssrc first and falls back to whatever we pass.
+            ssrc_hint = (
+                controller.vfo.ssrc
+                if controller.vfo.ssrc is not None
+                else next(iter(controller.active_channels), None)
+            )
+```
+
+Before the first tune of the session there is still nothing to poll and the
+window stays unknown, which is correct: nothing has told radiod where to put
+it yet.
+
+- [ ] **Step 4: Verify the app still imports and starts**
 
 ```bash
 cd /home/mjh/git/radiod-monitor
@@ -974,10 +1006,10 @@ Expected: IMPORT_OK and all tests passing. `backend.app` will NOT import yet —
 it still references `audio_streamer`, which Task 4 replaces. Say so in your
 report rather than trying to fix `app.py` here.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add backend/radio_controller.py
+git add backend/radio_controller.py backend/app.py
 git commit -m "feat(controller): own sensors and the VFO separately
 
 active_channels is now only the sensor set feeding the activity map. The
@@ -995,6 +1027,18 @@ channel the user listens through is the VFO and is not swept by a search."
 **Interfaces:**
 - Consumes: `RadioController.vfo` (Task 3).
 - Produces: `WS /ws/audio` accepting `{"tune": <freq_hz>}` and emitting `{"type":"tuned"|"nosignal", ...}` plus binary Opus frames.
+
+**Two `streamer` references in `app.py` die with the module** and must be
+replaced, not merely deleted:
+
+- `await streamer.drop_unmonitored(controller.monitored_freqs)` in `_converge`
+  — delete outright. It existed to stop `ManagedStream` re-creating channels a
+  search had swept; the VFO is never swept, so there is nothing to drop.
+- `if not any(streamer.listeners.values()):` guarding
+  `controller.window.release(...)` in `_converge` — becomes
+  `if not controller.vfo.listeners:`. Keep the guard. Without it a re-search
+  drops the anchor under someone who is listening, which un-centres the window
+  mid-audio.
 
 - [ ] **Step 1: Replace the route**
 
