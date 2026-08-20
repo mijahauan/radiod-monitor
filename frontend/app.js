@@ -38,7 +38,6 @@ let markers = {};           // freq_hz -> Leaflet Marker
 let stationsData = [];
 let wsControl;
 let currentMode = '';
-let currentAudioChannels = 1;   // set from each results message
 let currentActivityAvailable = true;
 let sourcesSchema = {};     // key -> {display_name, controls, preset, audio_channels}
 
@@ -131,7 +130,7 @@ async function selectHost(address) {
         }
         console.log(`Switched to radiod: ${address}`);
         // Clear any in-flight audio and any stale markers, then re-scan.
-        if (currentSession) { currentSession.stop(); currentSession = null; }
+        if (audioSession) { audioSession.stop(); audioSession = null; }
         audioPanel.classList.add('hidden');
         clearStations();
         triggerSearch();
@@ -278,10 +277,6 @@ function clearStations() {
 function handleSearchResults(data) {
     stationsData = data.stations || [];
     repeaterCount.textContent = stationsData.length;
-    // Remember the channel count the backend is emitting for this mode so
-    // listenToStation can configure the WebCodecs AudioDecoder correctly.
-    // wfm is stereo (2 channels), everything else is mono.
-    currentAudioChannels = data.audio_channels || 1;
     // False when the station set is wider than the receiver's window: no
     // channels exist, so no marker will ever go green. There is no activity
     // legend in this UI to hide, so the flag's only consumer is the frequency
@@ -412,16 +407,24 @@ function escapeHtml(s) {
 }
 
 // ---------------------------------------------------------------------------
-// Audio — WebSocket + WebCodecs AudioDecoder
+// Audio — one persistent WebSocket + WebCodecs AudioDecoder, retuned
+// underneath by sending {tune: freqHz}. The server never tears down the
+// socket to change stations; each "tuned" message is a decoder-reset
+// boundary because Opus decoder state is per-stream and the channel count
+// can differ between presets (mono NWS vs stereo FM).
 // ---------------------------------------------------------------------------
 const AUDIO_SAMPLE_RATE = 48000;
 const MIN_BUFFER_PACKETS = 5;   // ~100 ms jitter buffer
 const START_DELAY_SEC = 0.15;
 
+function setAudioStatus(text) {
+    if (audioRepeaterFreq) audioRepeaterFreq.textContent = text;
+}
+
 class AudioSession {
-    constructor(freqHz, numChannels) {
-        this.freqHz = freqHz;
-        this.numChannels = numChannels || 1;
+    constructor() {
+        this.freqHz = null;
+        this.numChannels = 1;
         this.ws = null;
         this.audioContext = null;
         this.decoder = null;
@@ -429,6 +432,8 @@ class AudioSession {
         this.nextPlayTime = 0;
         this.playing = false;
         this.stopped = false;
+        this.tuning = false;
+        this.pendingName = '';
     }
 
     async start() {
@@ -443,22 +448,15 @@ class AudioSession {
         }
         this._rxCount = 0;
         this._decodeErrCount = 0;
-        this.decoder = new AudioDecoder({
-            output: (audioData) => this._onDecoded(audioData),
-            error: (e) => console.error('AudioDecoder error callback:', e),
-        });
-        // Configuration waits for the server's config message, which carries
-        // the channel count read from the first Opus frame's TOC byte. A
-        // count guessed from the preset is not reliable — the wfm preset
-        // ships mono in some installs and stereo in others — and a wrong
-        // numberOfChannels makes WebCodecs throw on the first packet.
+        // The decoder is (re)created per "tuned" message, not here — there is
+        // no station yet, so no channel count to configure it with.
 
         const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        this.ws = new WebSocket(`${proto}//${window.location.host}/ws/audio/${this.freqHz}`);
+        this.ws = new WebSocket(`${proto}//${window.location.host}/ws/audio`);
         this.ws.binaryType = 'arraybuffer';
-        this.ws.onopen    = () => console.log(`Audio WS open for ${this.freqHz/1e6} MHz`);
+        this.ws.onopen    = () => console.log('Audio WS open');
         this.ws.onerror   = (e) => console.warn('Audio WS error', e);
-        this.ws.onclose   = () => console.log(`Audio WS closed for ${this.freqHz/1e6} MHz`);
+        this.ws.onclose   = () => console.log('Audio WS closed');
         this.ws.onmessage = (ev) => {
             if (this.stopped) return;
             if (typeof ev.data === 'string') {
@@ -467,9 +465,10 @@ class AudioSession {
             }
             if (!(ev.data instanceof ArrayBuffer)) return;
             if (!this.decoder || this.decoder.state !== 'configured') {
-                // Frames that arrive before the config message have no
-                // decoder to go to. Opus frames are self-contained, so
-                // dropping the first few costs at most a few ms of audio.
+                // Frames that arrive before the first "tuned" message (or
+                // between a tune and its decoder reset) have no decoder to
+                // go to. Opus frames are self-contained, so dropping the
+                // first few costs at most a few ms of audio.
                 return;
             }
             this._rxCount++;
@@ -489,23 +488,47 @@ class AudioSession {
         };
     }
 
+    async tune(freqHz, name) {
+        this.pendingName = name;
+        this.tuning = true;
+        this.pending = [];
+        this.playing = false;
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({ tune: freqHz }));
+        }
+    }
+
     _onControlMessage(text) {
         let msg;
         try { msg = JSON.parse(text); } catch (_) { return; }
-        if (msg.type !== 'config' || !msg.channels) return;
-        if (!this.decoder || this.decoder.state === 'closed') return;
-        if (this.decoder.state === 'configured' && this.numChannels === msg.channels) return;
-        this.numChannels = msg.channels;
-        console.log(`${this.freqHz/1e6} MHz: configuring decoder for ${msg.channels}-channel Opus`);
-        try {
-            this.decoder.configure({
-                codec: 'opus',
-                sampleRate: AUDIO_SAMPLE_RATE,
-                numberOfChannels: msg.channels,
-            });
-        } catch (e) {
-            console.error('AudioDecoder configure failed:', e);
+        if (msg.type === 'tuned') {
+            this.tuning = false;
+            this.freqHz = msg.freq_hz;
+            this._resetDecoder(msg.channels || 1);
+            setAudioStatus(`${this.pendingName || ''} ${(msg.freq_hz/1e6).toFixed(1)} MHz`);
+        } else if (msg.type === 'nosignal') {
+            this.tuning = false;
+            setAudioStatus(`no signal on ${(msg.freq_hz/1e6).toFixed(1)} MHz`);
+        } else if (msg.type === 'error') {
+            this.tuning = false;
+            setAudioStatus(msg.message);
         }
+    }
+
+    _resetDecoder(channels) {
+        if (this.decoder && this.decoder.state !== 'closed') {
+            try { this.decoder.close(); } catch (_) {}
+        }
+        this.pending = [];
+        this.playing = false;
+        this.decoder = new AudioDecoder({
+            output: (a) => this._onDecoded(a),
+            error: (e) => console.error('AudioDecoder error:', e),
+        });
+        this.decoder.configure({
+            codec: 'opus', sampleRate: AUDIO_SAMPLE_RATE, numberOfChannels: channels,
+        });
+        this.numChannels = channels;
     }
 
     _onDecoded(audioData) {
@@ -569,23 +592,27 @@ class AudioSession {
     }
 }
 
-let currentSession = null;
+let audioSession = null;
 
-function listenToStation(freqHz, name) {
-    if (currentSession) { currentSession.stop(); currentSession = null; }
+async function listenToStation(freqHz, name) {
     audioRepeaterCallsign.textContent = name;
-    audioRepeaterFreq.textContent = `${(freqHz / 1e6).toFixed(3)} MHz`;
     audioPanel.classList.remove('hidden');
     resumeAudioBtn.classList.add('hidden');
-
-    const session = new AudioSession(freqHz, currentAudioChannels);
-    currentSession = session;
-    session.start().catch(err => {
-        console.error('Audio start failed:', err);
-        alert(`Failed to start audio: ${err.message}`);
-        session.stop();
-        if (currentSession === session) currentSession = null;
-    });
+    if (!audioSession) {
+        audioSession = new AudioSession();
+        try {
+            await audioSession.start();
+        } catch (err) {
+            console.error('Audio start failed:', err);
+            alert(`Failed to start audio: ${err.message}`);
+            audioSession = null;
+            return;
+        }
+    }
+    setAudioStatus('tuning…');
+    await audioSession.tune(freqHz, name);
+    const marker = markers[freqHz];
+    if (marker) marker.openPopup();
     map.closePopup();
 }
 window.listenToStation = listenToStation;  // popup onclick
@@ -765,15 +792,16 @@ function freqStripMouseLeave() {
 }
 
 stopAudioBtn.onclick = () => {
-    if (currentSession) { currentSession.stop(); currentSession = null; }
+    if (audioSession) { audioSession.stop(); audioSession = null; }
     audioPanel.classList.add('hidden');
     audioRepeaterCallsign.textContent = '—';
+    audioRepeaterFreq.textContent = '—';
 };
 
 resumeAudioBtn.addEventListener('click', async () => {
-    if (currentSession && currentSession.audioContext) {
+    if (audioSession && audioSession.audioContext) {
         try {
-            await currentSession.audioContext.resume();
+            await audioSession.audioContext.resume();
             resumeAudioBtn.classList.add('hidden');
         } catch (e) { console.error('Audio manual resume failed:', e); }
     }
