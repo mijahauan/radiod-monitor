@@ -40,7 +40,7 @@ instead of the station the user asked for.
 import asyncio
 import logging
 import time
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from ka9q import RadiodStream, StreamQuality, discover_channels
 from ka9q.types import Encoding
@@ -148,6 +148,10 @@ class Vfo:
         self.settle_sec = settle_sec
         self.flush_sec = flush_sec
         self.ssrc: Optional[int] = None
+        # preset -> SSRC. One channel per preset, each created once and only
+        # retuned, so nothing is ever removed mid-session and no re-creation
+        # can land inside radiod's purge. See _ensure_channel_exists.
+        self._by_preset: Dict[str, int] = {}
         self.freq_hz: Optional[float] = None
         self.preset: Optional[str] = None
         self.sample_rate: Optional[int] = None
@@ -326,30 +330,46 @@ class Vfo:
           3. Nothing there -- create one and keep whatever SSRC the library
              allocates.
         """
-        # A preset change is a REPLACEMENT, not a retune. Changing a live
-        # channel's preset does not bring the new demodulator up: measured on
-        # a channel taken from nfm@162.400 to wfm@91.300 with the window
-        # correctly centred (IF +0.0 kHz), 0 frames in 25 s and no SNR at all,
-        # while a FRESH wfm channel on the same frequency delivered 501 frames
-        # in 10 s with snr 18.6 and its first frame in 0.20 s.
+        # ONE CHANNEL PER PRESET, each created once and thereafter only
+        # retuned. Two measurements force this shape.
         #
-        # This does not violate "retuned, never recreated". That rule exists
-        # because re-creating the SAME SSRC inside radiod's ~20 s purge hands
-        # back a corpse -- and `preset` is one of the inputs to the SSRC hash,
-        # so the replacement channel has a DIFFERENT SSRC by construction.
-        # The removed and created SSRCs are disjoint, exactly as they are in
-        # the sensor diff. A station change WITHIN a mode is still a retune.
-        if self.ssrc is not None and self.preset not in (None, preset):
-            logger.info(
-                f"Preset {self.preset} -> {preset}: replacing the VFO channel "
-                f"(a preset change in place does not start the demodulator)"
-            )
-            try:
-                self.control.remove_channel(self.ssrc)
-            except Exception as e:
-                logger.debug(f"replace: remove {self.ssrc}: {e}")
+        # First, changing a live channel's preset does not start the new
+        # demodulator: a channel taken from nfm@162.400 to wfm@91.300 with the
+        # window correctly centred (IF +0.0 kHz) produced 0 frames in 25 s and
+        # no SNR, while a fresh wfm channel on the same frequency gave 501
+        # frames in 10 s, snr 18.6, first frame at 0.20 s. So a mode change
+        # cannot reuse the channel.
+        #
+        # Second, removing the old one and creating a new one -- which looked
+        # safe, since `preset` is an input to the SSRC hash, so the two have
+        # different SSRCs -- fails as soon as the user switches BACK. A session
+        # alternating NWS and FM cycles between exactly two SSRCs, and each
+        # re-creation lands inside the ~20 s purge radiod started when that
+        # same SSRC was removed a moment earlier. Observed directly: the VFO
+        # alternating between 1073068374 (nfm) and 588263454 (wfm), with FM
+        # playing on one switch and silent on the next.
+        #
+        # Keeping a channel per preset removes the operation that starts a
+        # purge. Nothing is ever destroyed mid-session, so nothing can be
+        # re-created into a corpse, and switching back to a mode reuses a
+        # channel that has been alive all along. The cost is one idle
+        # demodulator per preset the session has visited -- at most three or
+        # four -- and `close()` sweeps them all at shutdown.
+        held = self._by_preset.get(preset)
+        if held is not None:
+            if self.control.poll_channel(held, timeout=2.0) is not None:
+                changed = (held != self.ssrc)
+                self.ssrc = held
+                self.preset = preset
+                return changed
+            # radiod forgot it (a restart); fall through and make a new one.
+            self._by_preset.pop(preset, None)
+            if self.ssrc == held:
+                self.ssrc = None
+
+        if self.preset not in (None, preset):
+            # Moving to a different preset's channel. The old one stays put.
             self.ssrc = None
-            self.preset = None
 
         if self.ssrc is not None:
             if self.control.poll_channel(self.ssrc, timeout=2.0) is not None:
@@ -381,10 +401,19 @@ class Vfo:
         except Exception as e:
             logger.debug(f"vfo adopt scan: {e}")
             existing = []
-        if existing:
-            self.ssrc = existing[0].ssrc
-            self.preset = None  # unknown -- force a preset command below
-            logger.info(f"Adopted existing channel SSRC {self.ssrc} as the VFO")
+        # Adopt only a channel already on the preset we want. A preset command
+        # does not start a demodulator (see the top of this method), so
+        # adopting one on the wrong preset and trying to convert it is a dead
+        # end -- creating is the only way to get a working demod for a preset.
+        matching = [ch for ch in existing
+                    if (getattr(ch, "preset", None) or "").lower() == preset.lower()]
+        if matching:
+            self.ssrc = matching[0].ssrc
+            self.preset = preset
+            self._by_preset[preset] = self.ssrc
+            logger.info(
+                f"Adopted existing {preset} channel SSRC {self.ssrc} as the VFO"
+            )
             return True
 
         # radiod hands back a channel it is still reaping if the same
@@ -397,6 +426,7 @@ class Vfo:
             gain=0.0, destination=self.destination, encoding=Encoding.OPUS,
         )
         self.preset = preset
+        self._by_preset[preset] = self.ssrc
         born = self.control.poll_channel(self.ssrc, timeout=2.0)
         if born is not None and (getattr(born, "frequency", None) or 0) == 0:
             logger.warning(
@@ -462,6 +492,22 @@ class Vfo:
 
         # 2. Frequency first...
         self.control.set_frequency(self.ssrc, freq_hz)
+
+        # ...and drag the other presets' channels along. They are idle, but
+        # they are not free: every channel shares one front-end window, and a
+        # channel left in the band we came from fights the one we are going
+        # to. Measured with seven live NWS channels at 162 MHz and the VFO on
+        # 91.300 MHz FM: 0 frames in 6 s even though the window had moved
+        # correctly (LO 91.3000, IF +0.0). One stranded channel does the same.
+        # Parking them on the current frequency keeps every channel inside the
+        # window and costs a demodulator that nobody listens to.
+        for other_preset, other_ssrc in self._by_preset.items():
+            if other_ssrc == self.ssrc:
+                continue
+            try:
+                self.control.set_frequency(other_ssrc, freq_hz)
+            except Exception as e:
+                logger.debug(f"parking {other_preset} channel: {e}")
         # 3. ...then the preset, which restarts the demodulator in place --
         # which is also the retry, and is why the retry never destroys the VFO.
         if preset != self.preset or restart_demod:
