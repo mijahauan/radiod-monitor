@@ -1376,6 +1376,25 @@ anchor side selection depends on where the LO sits, radiod ignores an anchor
 already inside the window, and the whole module collapses to `probe()` and
 `read()` if radiod is ever fixed to reserve the demodulator's real bandwidth.
 
+Three facts learned during implementation belong in that section, because each
+was expensive and none is visible from the code alone:
+
+- **The anchor offset is half the window's WIDTH, not either edge.**
+  `target ± ((high_edge - low_edge)/2 - margin)`. The edge-based form is
+  identical whenever the window is symmetric about the LO — which is why it
+  worked on the Airspy HF+ and hid the bug — but on the R2, whose window sits
+  at −4700..−600 kHz, it places the anchor *inside* the window, where radiod
+  ignores it. Anchor placement fails silently: there is no error, just a
+  station that never comes up.
+- **The anchor lives on its own multicast destination** (`radiod-monitor-anchor`).
+  It carries no audio, and sharing the audio group let the VFO's
+  adopt-an-existing-channel scan mistake the anchor for the VFO after a restart.
+  This is also why the anchor needs no exemption from the stale-channel sweep,
+  while **the VFO does** — see `_apply_stations_locked`.
+- **A channel radiod parks at the window edge cannot be rescued by moving the
+  window afterwards.** Centre first, then tune. This is why `Vfo._tune_once`
+  calls `centre_on()` before `set_frequency()`.
+
 - [ ] **Step 3: Update the routes block**
 
 ```
@@ -1386,18 +1405,36 @@ WS   /ws/audio
   ← one binary message per Opus frame
 ```
 
-- [ ] **Step 4: Verify no stale references**
+- [ ] **Step 4: Clean the stale comments left in the code**
+
+Deleting `backend/audio_streamer.py` left comments referring to a module that
+no longer exists. They are comments only — nothing executable — but they point
+a reader at the design this plan replaced, which is exactly how the dead anchor
+check misled Task 3's implementer. Fix each in place:
+
+- `backend/radio_controller.py:10` — "reachable from AudioStreamer with the
+  same arguments"
+- `backend/radio_controller.py:60` — "AudioStreamer reads this when..."
+- `backend/radio_controller.py:378` — "verify in AudioStreamer._assert_opus,
+  once per listener,"
+- `backend/sources/base.py:78` — the `audio_channels` note referencing
+  `audio_streamer.opus_channels()`, now `backend/vfo.py`'s `opus_channels()`
+
+Re-word each to name the VFO or `backend/vfo.py`; do not simply delete the
+sentences, as each carries a fact that is still true.
+
+- [ ] **Step 5: Verify no stale references**
 
 ```bash
 cd /home/mjh/git/radiod-monitor
-grep -n "audio_streamer\|focus_on\|ws/audio/{freq" CLAUDE.md
+grep -rn "audio_streamer\|AudioStreamer\|focus_on\|ws/audio/{freq" CLAUDE.md backend/ frontend/
 ```
 Expected: empty.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add CLAUDE.md
+git add CLAUDE.md backend/radio_controller.py backend/sources/base.py
 git commit -m "docs: the audio plane is one retunable VFO"
 ```
 
