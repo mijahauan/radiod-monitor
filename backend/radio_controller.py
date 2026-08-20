@@ -26,6 +26,7 @@ from ka9q import (
 from ka9q.types import Encoding
 
 from .sources.base import Station
+from .vfo import Vfo
 from .window import FrontEndWindow, DEFAULT_USABLE_BW_HZ
 
 logger = logging.getLogger(__name__)
@@ -78,6 +79,22 @@ class RadioController:
         # FrontEndWindow also owns placing the front end (the anchor
         # mechanism -- see backend/window.py).
         self.window = FrontEndWindow()
+
+        # Where the anchor lives. It carries no audio, so it does not belong
+        # on the audio group: sharing one destination is what let the VFO's
+        # adopt-an-existing-channel scan pick up the anchor after a restart
+        # and destroy the centring that wfm depends on. A separate group also
+        # makes the anchor's exemption from the stale sweep structural rather
+        # than a special case.
+        self.anchor_destination: str = generate_multicast_ip("radiod-monitor-anchor")
+
+        # The one channel the user listens through. Separate from the sensor
+        # channels in active_channels, which exist only to report SNR for the
+        # activity map and are never listened to.
+        self.vfo = Vfo(control=None, window=self.window,
+                       destination=self.destination,
+                       anchor_destination=self.anchor_destination)
+
         self._apply_lock = threading.Lock()
 
     async def connect(self):
@@ -90,6 +107,10 @@ class RadioController:
         await asyncio.to_thread(
             self.window.probe, self.control, self.destination, self.sample_rate
         )
+
+        self.vfo.control = self.control
+        self.vfo.ssrc = None      # an SSRC belongs to one radiod, not to us
+        self.vfo.preset = None
 
     # Threshold used to hold a squelch open that radiod will not let us
     # switch off. Low enough that any demodulated signal clears it.
@@ -384,11 +405,20 @@ class RadioController:
         """
         if not self.control:
             return
-        dest_ip = self.destination.split(":")[0]
+
+        try:
+            await self.vfo.stop()
+        except Exception as e:
+            logger.debug(f"close: vfo stop: {e}")
+
+        dest_ips = tuple(
+            d.split(":")[0]
+            for d in (self.destination, self.anchor_destination)
+        )
         ssrcs = set(self.active_channels)
         try:
             for ssrc, ch in discover_channels(self.radiod_host, 1.0).items():
-                if dest_ip in (ch.multicast_address or ""):
+                if any(d in (ch.multicast_address or "") for d in dest_ips):
                     ssrcs.add(ssrc)
         except Exception as e:
             logger.warning(f"close: discover_channels failed, "
@@ -399,7 +429,7 @@ class RadioController:
             except Exception:
                 pass
         if ssrcs:
-            logger.info(f"Released {len(ssrcs)} channel(s) on {dest_ip}")
+            logger.info(f"Released {len(ssrcs)} channel(s) on {dest_ips}")
         self.active_channels.clear()
         self.control.close()
         self.control = None

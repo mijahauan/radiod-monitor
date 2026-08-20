@@ -98,7 +98,15 @@ async def activity_monitor():
             # an SSRC from the anchor channel alone, which is precisely the
             # case (directory mode) where active_channels is empty but the
             # frequency strip most needs the window position.
-            ssrc_hint = next(iter(controller.active_channels), None)
+            # The VFO outlives searches, so it is the reliable hint. In
+            # directory mode active_channels is empty by design, and the
+            # anchor may not exist until the first Listen -- read() tries
+            # its own anchor_ssrc first and falls back to whatever we pass.
+            ssrc_hint = (
+                controller.vfo.ssrc
+                if controller.vfo.ssrc is not None
+                else next(iter(controller.active_channels), None)
+            )
             window = await asyncio.to_thread(
                 controller.window.read, controller.control, ssrc_hint
             )
