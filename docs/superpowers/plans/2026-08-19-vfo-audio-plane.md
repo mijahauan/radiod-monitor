@@ -19,6 +19,7 @@
 - The anchor must be placed on whichever side falls **outside** the current window. radiod ignores a channel already in range, so the wrong side is a silent no-op.
 - **The app never computes an SSRC.** `create_channel()` allocates one and returns it; the app stores that integer as an opaque handle. Frequency, preset, and sample rate are the app's vocabulary — transport identity is ka9q-python's. Importing `allocate_ssrc` in `backend/` is a defect.
 - The RTP receiver is bound to the channel's **SSRC** (`RadiodStream`), never to its frequency (`ManagedStream`), or a retune strands it on a second channel.
+- **The anchor lives on its own multicast destination**, separate from the audio group. It carries no audio, and sharing a group lets the VFO's adopt-an-existing-channel scan mistake the anchor for the VFO — which destroys the centring `wfm` depends on.
 - `WINDOW_FILL = 0.8`; `DEFAULT_USABLE_BW_HZ = 8_000_000.0`; anchor margin `6_000.0` Hz.
 - Audio verification is **content-based**: voice/hiss ratio and envelope variation against a known-good reference (NWR reads ≈14 and ≈0.4; steady hiss reads 0.03). Frame counts and RMS do not distinguish audio from noise.
 - Run everything through the project venv: `venv/bin/python`, `venv/bin/pytest`.
@@ -930,11 +931,23 @@ re-create only when radiod has genuinely forgotten us."
 In `__init__`, after `self.window = FrontEndWindow()`:
 
 ```python
+        # Where the anchor lives. It carries no audio, so it does not belong
+        # on the audio group: sharing one destination is what let the VFO's
+        # adopt-an-existing-channel scan pick up the anchor after a restart
+        # and destroy the centring that wfm depends on. A separate group also
+        # makes the anchor's exemption from the stale sweep structural rather
+        # than a special case.
+        self.anchor_destination: str = generate_multicast_ip("radiod-monitor-anchor")
+
         # The one channel the user listens through. Separate from the sensor
         # channels in active_channels, which exist only to report SNR for the
         # activity map and are never listened to.
-        self.vfo = Vfo(control=None, window=self.window, destination=self.destination)
+        self.vfo = Vfo(control=None, window=self.window,
+                       destination=self.destination,
+                       anchor_destination=self.anchor_destination)
 ```
+
+`generate_multicast_ip` is already imported at `backend/radio_controller.py:24`.
 
 In `connect()`, after the control is created and the window probed:
 
@@ -961,8 +974,30 @@ In `close()`, before the destination sweep:
             logger.debug(f"close: vfo stop: {e}")
 ```
 
-The existing sweep then removes the VFO's channel and the anchor along with
-the sensors, which is correct at shutdown: nothing will be re-created.
+The existing sweep then removes the VFO's channel along with the sensors,
+which is correct at shutdown: nothing will be re-created.
+
+The sweep matches on `dest_ip = self.destination.split(":")[0]`, so it no
+longer covers the anchor now that the anchor has its own group. Extend it to
+both. In `close()`, where `dest_ip` is computed:
+
+```python
+        dest_ips = tuple(
+            d.split(":")[0]
+            for d in (self.destination, self.anchor_destination)
+        )
+```
+
+and change the membership test in the `discover_channels` loop from
+`if dest_ip in (ch.multicast_address or "")` to:
+
+```python
+                if any(d in (ch.multicast_address or "") for d in dest_ips):
+```
+
+Miss this and the anchor survives every shutdown, holding the front end on a
+station nobody is listening to until radiod itself restarts — the orphan
+accumulation this plan exists to end.
 
 - [ ] **Step 3: Give the activity monitor an SSRC it can always poll**
 
