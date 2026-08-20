@@ -19,6 +19,14 @@ retune; see the task notes.
 Tuning order matters as much as identity: the window is centred BEFORE the
 frequency is set, because a demodulator that starts parked at the window edge
 does not recover when the window later moves onto it.
+
+The VFO's own channel and the window's anchor channel live on two DIFFERENT
+destinations. The anchor carries no audio -- it exists purely to make radiod
+park the front end where we want it -- so it has no business on the audio
+multicast group. Sharing one destination let the adopt-on-restart scan below
+pick up the anchor and mistake it for the VFO, which then "centred" the
+window on wherever the anchor happened to be instead of the station the user
+asked for.
 """
 import asyncio
 import logging
@@ -55,10 +63,11 @@ class Vfo:
     """One retunable channel plus its listener fan-out."""
 
     def __init__(self, control, window, destination: str,
-                 settle_sec: float = TUNE_SETTLE_SEC):
+                 anchor_destination: str, settle_sec: float = TUNE_SETTLE_SEC):
         self.control = control
         self.window = window
         self.destination = destination
+        self.anchor_destination = anchor_destination
         self.settle_sec = settle_sec
         self.ssrc: Optional[int] = None
         self.freq_hz: Optional[float] = None
@@ -69,6 +78,7 @@ class Vfo:
         self._stream = None
         self._frames_seen = 0
         self._non_opus_warned = False
+        self._lock = asyncio.Lock()
 
     # -- listeners ---------------------------------------------------------
     async def add_listener(self, queue: asyncio.Queue) -> None:
@@ -104,23 +114,37 @@ class Vfo:
     # -- tuning ------------------------------------------------------------
     async def tune(self, freq_hz: float, preset: str, sample_rate: int) -> dict:
         """Point the VFO at a station. Returns the message to send listeners."""
-        for attempt in range(1, MAX_TUNE_ATTEMPTS + 1):
-            self._frames_seen = 0
-            await asyncio.to_thread(self._tune_once, freq_hz, preset,
-                                    sample_rate, attempt > 1)
-            if self._stream is None:
-                await self._start_stream()
-            await asyncio.sleep(self.settle_sec)
-            if self._frames_seen > 0:
-                self.freq_hz, self.sample_rate = freq_hz, sample_rate
-                return {"type": "tuned", "freq_hz": freq_hz,
-                        "channels": self.channels or 1}
-            logger.info(
-                f"No RTP {self.settle_sec}s after tuning {freq_hz/1e6:.3f} MHz "
-                f"(attempt {attempt}/{MAX_TUNE_ATTEMPTS})"
-            )
-        self.freq_hz, self.sample_rate = freq_hz, sample_rate
-        return {"type": "nosignal", "freq_hz": freq_hz}
+        async with self._lock:
+            if freq_hz != self.freq_hz:
+                # A stale channel count from the old station must not survive
+                # the retune -- WebCodecs throws if the header lies about it.
+                self.channels = None
+            self.freq_hz = freq_hz
+            for attempt in range(1, MAX_TUNE_ATTEMPTS + 1):
+                await asyncio.to_thread(self._tune_once, freq_hz, preset,
+                                        sample_rate, attempt > 1)
+                # Zeroed only now: RTP from the PREVIOUS station can still be
+                # arriving while _tune_once runs (it blocks in a worker
+                # thread while the event loop keeps delivering old frames),
+                # and counting those would make a dead new station look live.
+                self._frames_seen = 0
+                if self._stream is None:
+                    await self._start_stream()
+                await self._settle()
+                if self._frames_seen > 0:
+                    self.sample_rate = sample_rate
+                    return {"type": "tuned", "freq_hz": freq_hz,
+                            "channels": self.channels or 1}
+                logger.info(
+                    f"No RTP {self.settle_sec}s after tuning {freq_hz/1e6:.3f} MHz "
+                    f"(attempt {attempt}/{MAX_TUNE_ATTEMPTS})"
+                )
+            self.sample_rate = sample_rate
+            return {"type": "nosignal", "freq_hz": freq_hz}
+
+    async def _settle(self) -> None:
+        """Wait for RTP to appear after a retune. A seam for tests."""
+        await asyncio.sleep(self.settle_sec)
 
     def _ensure_channel_exists(self, freq_hz: float, preset: str,
                                sample_rate: int) -> bool:
@@ -139,6 +163,10 @@ class Vfo:
         if self.ssrc is not None:
             if self.control.poll_channel(self.ssrc, timeout=2.0) is not None:
                 return False
+            # One dropped status reply reads exactly like a radiod restart --
+            # confirm with a second poll before tearing the VFO down.
+            if self.control.poll_channel(self.ssrc, timeout=2.0) is not None:
+                return False
             logger.warning(
                 f"radiod no longer has SSRC {self.ssrc} -- it restarted; "
                 f"re-establishing the VFO"
@@ -147,13 +175,16 @@ class Vfo:
             self.preset = None
 
         try:
+            # discover_channels always returns Dict[SSRC, ChannelInfo]
+            # (ka9q/discovery.py); every path goes through the same dict
+            # constructor, so no defensive isinstance check is needed here.
+            # listen_duration's ~2 s default only costs this establish path,
+            # never a routine retune (self.ssrc is already set by then).
             found = discover_channels(self.control.status_address)
-            # discover_channels normally returns Dict[SSRC, ChannelInfo]; a
-            # test double may hand back the ChannelInfo list directly.
-            candidates = found.values() if isinstance(found, dict) else found
+            dest_ip = self.destination.split(":")[0]
             existing = [
-                ch for ch in candidates
-                if getattr(ch, "multicast_address", None) == self.destination
+                ch for ch in found.values()
+                if dest_ip in (ch.multicast_address or "")
             ]
         except Exception as e:
             logger.debug(f"vfo adopt scan: {e}")
@@ -184,8 +215,11 @@ class Vfo:
                 logger.debug(f"vfo stream stop: {e}")
             self._stream = None
 
-        # Centre BEFORE tuning: a demod that starts at the edge never recovers.
-        self.window.centre_on(self.control, freq_hz, self.destination,
+        # Centre BEFORE tuning: a demod that starts at the edge never
+        # recovers. The anchor that does the centring lives on its own
+        # destination -- never the VFO's -- so a later adopt scan can never
+        # mistake it for the VFO.
+        self.window.centre_on(self.control, freq_hz, self.anchor_destination,
                               sample_rate, ssrc_hint=self.ssrc)
         if preset != self.preset or restart_demod:
             # A preset command makes radiod restart the demodulator in place --
@@ -228,6 +262,10 @@ class Vfo:
             self._stream = stream
         except Exception as e:
             logger.error(f"Could not start the VFO stream: {e}")
+            try:
+                await asyncio.to_thread(stream.stop)
+            except Exception as stop_err:
+                logger.debug(f"vfo stream cleanup after failed start: {stop_err}")
 
     def _broadcast(self, frames: List[bytes]) -> None:
         for frame in frames:
