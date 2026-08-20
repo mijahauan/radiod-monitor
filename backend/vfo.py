@@ -227,7 +227,42 @@ class Vfo:
 
     def _tune_once(self, freq_hz: float, preset: str, sample_rate: int,
                    restart_demod: bool) -> None:
-        """Blocking half of a tune. Centre first, then set frequency."""
+        """Blocking half of a tune. Five steps, and the order is the point.
+
+        1. Centre the window on the target. Everything after this happens
+           inside a window that already covers the station.
+        2. Make sure the channel exists. Creating it now, rather than before
+           step 1, is what keeps radiod from starting a wfm demodulator parked
+           at the window edge -- a state it does not recover from when the
+           window later moves onto it (Global Constraint 2). Previously the
+           1.5 s retry re-asserted the preset and rescued it by accident.
+        3. Set the frequency. This is the retune case; on a fresh create the
+           channel is already there, and repeating it costs one command.
+        4. Set the preset, if it changed or this is a retry. It restarts the
+           demodulator, so it must come AFTER step 3: restart it while the
+           channel still holds the previous station's frequency and wfm.c
+           re-runs set_freq from that stale value, dragging the LO back off
+           the target we just centred on.
+        5. Re-assert the Opus grant and the held-open squelch.
+
+        Raises if there is no control connection -- the caller turns that into
+        a nosignal with a reason, which is a great deal more use than an
+        AttributeError reported to the user as "Malformed tune request".
+        """
+        if self.control is None:
+            raise RuntimeError("no connection to radiod")
+
+        # 1. Centre BEFORE anything else. The anchor that does the centring
+        # lives on its own destination -- never the VFO's -- so a later adopt
+        # scan can never mistake it for the VFO. With ssrc_hint=None (the
+        # session's first tune) centre_on takes its own deadlock-breaking
+        # path, so it does not need the VFO's channel to exist yet.
+        self._centred = self.window.centre_on(
+            self.control, freq_hz, self.anchor_destination,
+            sample_rate, ssrc_hint=self.ssrc,
+        )
+
+        # 2. Any channel created now is created inside the centred window.
         fresh = self._ensure_channel_exists(freq_hz, preset, sample_rate)
         if fresh and self._stream is not None:
             # The old stream is following an SSRC that no longer exists.
@@ -237,18 +272,14 @@ class Vfo:
                 logger.debug(f"vfo stream stop: {e}")
             self._stream = None
 
-        # Centre BEFORE tuning: a demod that starts at the edge never
-        # recovers. The anchor that does the centring lives on its own
-        # destination -- never the VFO's -- so a later adopt scan can never
-        # mistake it for the VFO.
-        self.window.centre_on(self.control, freq_hz, self.anchor_destination,
-                              sample_rate, ssrc_hint=self.ssrc)
+        # 3. Frequency first...
+        self.control.set_frequency(self.ssrc, freq_hz)
+        # 4. ...then the preset, which restarts the demodulator in place --
+        # which is also the retry, and is why the retry never destroys the VFO.
         if preset != self.preset or restart_demod:
-            # A preset command makes radiod restart the demodulator in place --
-            # which is the retry, and is why the retry never destroys the VFO.
             self.control.set_preset(self.ssrc, preset)
             self.preset = preset
-        self.control.set_frequency(self.ssrc, freq_hz)
+        # 5.
         self.control.set_output_encoding(self.ssrc, Encoding.OPUS)
         try:
             self.control.set_squelch(self.ssrc, enable=True,

@@ -24,13 +24,21 @@ class FakeChannelInfo:
 class FakeControl:
     """Records calls. `known` is the set of SSRCs radiod admits to having."""
 
-    def __init__(self, known=()):
+    def __init__(self, known=(), raise_on=None):
         self.calls = []
         self.status_address = "fake-radiod.local"
         self.known = set(known)
         self._next_ssrc = 0x1234
+        # Name of a command that should blow up the way a closed control
+        # socket does ("Not connected to radiod" is a RuntimeError).
+        self.raise_on = raise_on
+
+    def _maybe_raise(self, name):
+        if self.raise_on == name:
+            raise RuntimeError("Not connected to radiod")
 
     def create_channel(self, **kw):
+        self._maybe_raise("create_channel")
         assert kw.get("ssrc") is None or "ssrc" not in kw, (
             "the app must not choose the SSRC -- let the library allocate it"
         )
@@ -46,6 +54,7 @@ class FakeControl:
         return FakeChannelInfo(ssrc) if ssrc in self.known else None
 
     def set_frequency(self, ssrc, hz):
+        self._maybe_raise("set_frequency")
         self.calls.append(("set_frequency", hz))
 
     def set_preset(self, ssrc, preset):
@@ -62,14 +71,15 @@ class FakeControl:
 
 
 class FakeWindow:
-    def __init__(self):
+    def __init__(self, centres=True):
         self.low_edge_hz, self.high_edge_hz = -330_240.0, 330_240.0
         self.usable_bw_hz = 660_480.0
         self.anchor_ssrc = None
+        self.centres = centres
 
     def centre_on(self, control, freq_hz, destination, sample_rate, ssrc_hint=None):
         control.calls.append(("centre_on", freq_hz, destination))
-        return True
+        return self.centres
 
     def release(self, control):
         control.calls.append(("release",))
@@ -391,3 +401,48 @@ def test_stop_releases_the_window_anchor():
     c, v = make()
     asyncio.run(v.stop())
     assert ("release",) in c.calls
+
+# ---------------------------------------------------------------------------
+# Tuning ORDER. Both of these fail against the shipped implementation, which
+# created the channel before centring and sent set_preset before
+# set_frequency. Neither shows up as an error: a wfm demod started at the
+# window edge produces plausible fragments of audio, which is exactly the
+# failure mode this project has already been burned by.
+# ---------------------------------------------------------------------------
+def test_the_channel_is_created_inside_an_already_centred_window(monkeypatch):
+    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
+    c, v = make()
+    asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
+    names = [x[0] for x in c.calls]
+    assert names.index("centre_on") < names.index("create_channel"), (
+        "a wfm demod that STARTS parked at the window edge does not recover "
+        "when the window later moves onto it"
+    )
+
+
+def test_frequency_is_set_before_the_preset_restarts_the_demod(monkeypatch):
+    """A preset command restarts the demodulator, and wfm.c re-runs set_freq
+    at demod start. Restart it first and radiod re-places the channel from the
+    PREVIOUS station's frequency, dragging the LO off what we just centred."""
+    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
+    c, v = make()
+    asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
+    c.calls.clear()
+    asyncio.run(v.tune(162_450_000.0, "nfm", 48000))   # preset changes
+    names = [x[0] for x in c.calls]
+    assert "set_preset" in names, "a mode change must restart the demod"
+    assert names.index("set_frequency") < names.index("set_preset"), (
+        "restarting the demod on a stale frequency un-centres the window"
+    )
+
+
+def test_the_full_tune_order_is_centre_create_frequency_preset(monkeypatch):
+    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
+    c, v = make()
+    asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
+    names = [x[0] for x in c.calls]
+    ordered = [n for n in names
+               if n in ("centre_on", "create_channel", "set_frequency",
+                        "set_output_encoding")]
+    assert ordered == ["centre_on", "create_channel", "set_frequency",
+                       "set_output_encoding"]

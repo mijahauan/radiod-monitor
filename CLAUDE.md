@@ -312,8 +312,17 @@ Getting there took three fixes and disproved three earlier guesses in this file
      ever in the set it sweeps.
    - **A channel radiod parks at the window edge cannot be rescued by
      moving the window onto it afterwards** — the demodulator does not
-     recover. Centre first, then tune. This is why `Vfo._tune_once` calls
-     `centre_on()` before `set_frequency()`.
+     recover. `Vfo._tune_once` therefore runs a fixed five-step order and
+     every step of it is load-bearing: `centre_on()`, *then*
+     `_ensure_channel_exists()` (so a channel radiod creates is created
+     inside an already-centred window — creating it first left a fresh `wfm`
+     demod parked at the edge, rescued only by accident when the 1.5 s retry
+     re-asserted the preset), *then* `set_frequency()`, *then* `set_preset()`
+     if the preset changed or this is a retry, *then* `set_output_encoding()`
+     and the squelch. `set_preset` restarts the demodulator and `wfm.c`
+     re-runs `set_freq` at demod start, so issuing it before `set_frequency`
+     re-places the channel from the *previous* station's frequency and drags
+     the LO back off the target.
 
    The anchor is squelched shut, created once and then retuned (never
    recreated per station), and dropped by `FrontEndWindow.release()` when
