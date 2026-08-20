@@ -104,9 +104,17 @@ validation against `monitored_freqs` moves onto the `tune` message.
 
 `wfm` sometimes fails to start even with the window correctly centred — same
 station, same placement, alive on one attempt and silent on the next. After a
-tune, wait ~1.5 s for RTP. If none arrives, rebuild the VFO channel once (the
-window is already centred, which is the sequence measured to work) and retry,
-to a maximum of two attempts. The UI shows a brief "tuning…" state so a 3–4 s
+tune, wait ~1.5 s for RTP. If none arrives, **re-assert the preset** on the VFO,
+which makes radiod restart the demodulator in place, and wait ~1.5 s again. At
+most two such attempts.
+
+The retry must **not** destroy and re-create the VFO channel. Doing so
+re-creates an SSRC radiod is still purging (~20 s) and yields a dead channel —
+the exact race this design removes. Restarting the demod on the existing
+channel is a single command with no lifecycle consequences. Measured: a preset
+re-assert revived a silent centred channel in one case and not in another,
+which is why the attempt count is bounded and the honest outcome is
+`nosignal`. The UI shows a brief "tuning…" state so a 3–4 s
 worst case reads as the radio working rather than the app hanging. Continued
 silence is reported as `nosignal`, which is honest and actionable.
 
