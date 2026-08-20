@@ -37,7 +37,7 @@ Extracts window probing, reading and anchor placement out of `RadioController` i
 - Consumes: nothing from earlier tasks.
 - Produces:
   - `choose_anchor_frequency(target_hz, current_lo_hz, low_edge_hz, high_edge_hz, margin_hz=6000.0) -> Optional[float]` — pure; returns the anchor frequency to use, or None when neither side would fall outside the window.
-  - `class FrontEndWindow` with `probe(control, destination, sample_rate) -> Optional[float]` (returns usable width, sets `.low_edge_hz`/`.high_edge_hz`/`.usable_bw_hz`), `read(control, ssrc_hint) -> Optional[tuple[float, float]]` (absolute low/high), `centre_on(control, freq_hz, destination, sample_rate) -> bool`, `release(control)`, and attributes `low_edge_hz`, `high_edge_hz`, `usable_bw_hz`, `anchor_ssrc`.
+  - `class FrontEndWindow` with `probe(control, destination, sample_rate) -> Optional[float]` (returns usable width, sets `.low_edge_hz`/`.high_edge_hz`/`.usable_bw_hz`), `read(control, ssrc_hint) -> Optional[tuple[float, float]]` (absolute low/high), `centre_on(control, freq_hz, destination, sample_rate, ssrc_hint=None) -> bool`, `release(control)`, and attributes `low_edge_hz`, `high_edge_hz`, `usable_bw_hz`, `anchor_ssrc`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -85,6 +85,46 @@ def test_prefers_high_side_when_both_are_outside():
     # Deterministic choice keeps behaviour reproducible.
     got = choose_anchor_frequency(102_300_000.0, 90_000_000.0, LOW, HIGH, MARGIN)
     assert got == 102_300_000.0 + (HIGH - MARGIN)
+
+
+def test_anchor_is_retuned_not_recreated():
+    """The anchor is created once and moved thereafter.
+
+    Recreating it per station churns channels radiod reaps only after ~20 s;
+    a silent station once accumulated 38 dead channels that way and starved
+    the control socket, which is what made switching take minutes.
+    """
+    import backend.window as W
+
+    class Ctl:
+        def __init__(self):
+            self.creates = 0
+            self.retunes = 0
+        def ensure_channel(self, **kw):
+            self.creates += 1
+            class Ch:
+                ssrc = 0xABCD
+            return Ch()
+        def set_frequency(self, ssrc, hz):
+            self.retunes += 1
+        def set_squelch(self, ssrc, **kw):
+            pass
+        def poll_status(self, ssrc, timeout=2.0):
+            class FE:
+                first_lo = 90_000_000.0
+                fe_low_edge = LOW
+                fe_high_edge = HIGH
+            class S:
+                frontend = FE()
+            return S()
+
+    w = W.FrontEndWindow()
+    w.low_edge_hz, w.high_edge_hz = LOW, HIGH
+    c = Ctl()
+    assert w.centre_on(c, 102_300_000.0, "239.1.2.3", 48000, ssrc_hint=1) is True
+    assert w.centre_on(c, 91_300_000.0, "239.1.2.3", 48000, ssrc_hint=1) is True
+    assert c.creates == 1, "the anchor must be created once"
+    assert c.retunes >= 1, "subsequent placements must retune it"
 
 
 def test_asymmetric_window_is_honoured():
@@ -252,24 +292,24 @@ class FrontEndWindow:
             # The window is far wider than the offsets; nothing to centre.
             return True
         try:
-            anchor = control.ensure_channel(
-                frequency_hz=anchor_hz, preset="am", sample_rate=sample_rate,
-                gain=0.0, destination=destination, encoding=Encoding.OPUS, timeout=5.0,
-            )
+            if self.anchor_ssrc is None:
+                # Created once, then RETUNED -- never recreated per station.
+                # Recreating it per station churns channels radiod reaps only
+                # after ~20 s, which is how a silent station accumulated 38
+                # dead channels and starved the control socket.
+                anchor = control.ensure_channel(
+                    frequency_hz=anchor_hz, preset="am", sample_rate=sample_rate,
+                    gain=0.0, destination=destination,
+                    encoding=Encoding.OPUS, timeout=5.0,
+                )
+                self.anchor_ssrc = anchor.ssrc
+                control.set_squelch(self.anchor_ssrc, enable=True,
+                                    open_snr_db=80.0, close_snr_db=75.0)
+            else:
+                control.set_frequency(self.anchor_ssrc, anchor_hz)
         except Exception as e:
             logger.warning(f"Could not place the anchor at {anchor_hz/1e6:.3f} MHz: {e}")
             return False
-        try:
-            control.set_squelch(anchor.ssrc, enable=True,
-                                open_snr_db=80.0, close_snr_db=75.0)
-        except Exception:
-            pass
-        if self.anchor_ssrc is not None and self.anchor_ssrc != anchor.ssrc:
-            try:
-                control.remove_channel(self.anchor_ssrc)
-            except Exception:
-                pass
-        self.anchor_ssrc = anchor.ssrc
         logger.info(
             f"Window centred on {freq_hz/1e6:.3f} MHz via anchor at "
             f"{anchor_hz/1e6:.3f} MHz (SSRC {anchor.ssrc:08x})"
@@ -999,9 +1039,18 @@ the channel count can change between presets), then configure it with
     }
 ```
 
-Add a `setAudioStatus(text)` helper that writes into the existing audio panel
-element, and show "tuning…" from `tune()` until a `tuned` or `nosignal`
-arrives, so a 3–4 s worst case reads as the radio working.
+Add the status helper next to the other audio globals. `audioRepeaterFreq` is
+the existing element under the station name in the audio panel:
+
+```javascript
+function setAudioStatus(text) {
+    if (audioRepeaterFreq) audioRepeaterFreq.textContent = text;
+}
+```
+
+`tune()` sets it to "tuning…" and the `tuned`/`nosignal`/`error` branches above
+replace it, so a 3–4 s worst case reads as the radio working rather than the
+app hanging.
 
 - [ ] **Step 2: Point `listenToStation` at the persistent session**
 
