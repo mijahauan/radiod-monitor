@@ -194,11 +194,13 @@ def test_anchor_and_vfo_use_different_destinations(monkeypatch):
 
 
 def test_second_tune_does_not_create_a_channel(monkeypatch):
+    """Within a retunable preset. wfm is the documented exception -- see
+    test_a_wfm_channel_is_replaced_per_station_never_retuned."""
     monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
     c, v = make()
-    asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
+    asyncio.run(v.tune(162_400_000.0, "nfm", 48000))
     c.calls.clear()
-    asyncio.run(v.tune(91_300_000.0, "wfm", 48000))
+    asyncio.run(v.tune(162_450_000.0, "nfm", 48000))
     assert not any(x[0] == "create_channel" for x in c.calls), (
         "the VFO is retuned, never recreated"
     )
@@ -209,27 +211,20 @@ def test_second_tune_does_not_create_a_channel(monkeypatch):
     )
 
 
-def test_a_preset_change_uses_a_second_channel_and_destroys_nothing(monkeypatch):
-    """One channel per preset. A mode change moves to that preset's channel;
-    the old one is left alive, because removing it starts a ~20 s purge and a
-    session alternating NWS and FM would re-create each SSRC straight back
-    into the purge its own previous switch began -- observed as FM playing on
-    one switch and silent on the next."""
+def test_a_narrowband_channel_survives_a_mode_change(monkeypatch):
+    """The nfm channel is kept across a switch to FM and back, so returning to
+    NWS reuses a channel that has been alive all along rather than re-creating
+    one into radiod's ~20 s purge. Only the wfm channel is dropped, because it
+    cannot be parked -- retuning it is what kills it."""
     monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
     c, v = make()
-    asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
-    wfm_ssrc = v.ssrc
+    asyncio.run(v.tune(162_400_000.0, "nfm", 48000))
+    nfm_ssrc = v.ssrc
+    asyncio.run(v.tune(91_300_000.0, "wfm", 48000))
+    assert v.ssrc != nfm_ssrc
     c.calls.clear()
     asyncio.run(v.tune(162_450_000.0, "nfm", 48000))
-    nfm_ssrc = v.ssrc
-    assert nfm_ssrc != wfm_ssrc, "a different preset means a different channel"
-    assert not any(x[0] == "remove_channel" for x in c.calls), (
-        "nothing is destroyed, so nothing can be re-created into a purge"
-    )
-    # ...and going back reuses the channel that has been alive all along.
-    c.calls.clear()
-    asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
-    assert v.ssrc == wfm_ssrc
+    assert v.ssrc == nfm_ssrc, "the nfm channel was never destroyed"
     assert not any(x[0] == "create_channel" for x in c.calls)
 
 
@@ -271,10 +266,12 @@ def test_the_replacement_channel_is_created_with_the_new_preset(monkeypatch):
 
 
 def test_tune_never_removes_the_vfo_channel(monkeypatch):
+    """For a retunable preset. wfm channels ARE replaced per station, because
+    retuning one kills it -- see the wfm test."""
     monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
     c, v = make()
-    asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
-    asyncio.run(v.tune(91_300_000.0, "wfm", 48000))
+    asyncio.run(v.tune(162_400_000.0, "nfm", 48000))
+    asyncio.run(v.tune(162_450_000.0, "nfm", 48000))
     assert not any(x[0] == "remove_channel" for x in c.calls), (
         "removing it starts a ~20s purge; re-creating inside that window "
         "yields a dead channel"
@@ -728,4 +725,27 @@ def test_idle_preset_channels_are_parked_on_the_current_frequency(monkeypatch):
     assert retuned.count(91_300_000.0) >= 2, (
         "both the active wfm channel and the idle nfm one move to 91.300"
     )
+    assert not any(x[0] == "remove_channel" for x in c.calls), (
+        "an nfm channel is parked, not dropped -- it survives retuning"
+    )
     assert v.ssrc != nfm_ssrc
+
+
+def test_a_wfm_channel_is_replaced_per_station_never_retuned(monkeypatch):
+    """wfm.c does not survive a frequency change. Measured on one channel,
+    window verified by LO on every reading: fresh at 91.300 gave snr 19.29 and
+    251 frames in 5 s; retuned to 93.900, 0 frames; retuned BACK to 91.300 --
+    the frequency where it had just worked -- still 0 frames. So each FM
+    station gets its own channel, and its SSRC includes the frequency, so
+    returning to a station cannot re-create a channel into its own purge.
+    """
+    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
+    c, v = make()
+    asyncio.run(v.tune(91_300_000.0, "wfm", 48000))
+    first = v.ssrc
+    c.calls.clear()
+    asyncio.run(v.tune(93_900_000.0, "wfm", 48000))
+    assert v.ssrc != first, "a different station means a different channel"
+    assert any(x[0] == "create_channel" for x in c.calls)
+    assert not any(x[0] == "set_frequency" and x[1] == 93_900_000.0
+                   and x[1] == first for x in c.calls)

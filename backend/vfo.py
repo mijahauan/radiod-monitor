@@ -63,6 +63,20 @@ TUNE_SETTLE_SEC = 2.5
 # station we just left. Frames are discarded for this long after the retune
 # commands land, before any are counted.
 TUNE_FLUSH_SEC = 0.15
+
+# Presets whose demodulator does not survive a frequency change, and which
+# therefore need a NEW channel per station rather than a retune. Measured on
+# the Airspy HF+, one wfm channel, window verified by LO on every reading:
+#
+#   fresh wfm @91.300      LO 91.3000  IF +0.0k  snr 19.29  251 frames / 5 s
+#   retuned to 93.900      LO 93.9000  IF +0.0k  snr -8.45    0 frames / 5 s
+#   retuned back to 91.300 LO 91.3000  IF +0.0k  snr None     0 frames / 5 s
+#
+# The third line is the proof: the same channel, back on the frequency where
+# it had just worked, with the window on it, is dead. wfm.c does not survive
+# being retuned. Narrowband presets do -- nfm retunes across the NWR band all
+# day -- so this is deliberately a small exception list, not a policy.
+RECREATE_ON_RETUNE = frozenset({"wfm"})
 MAX_TUNE_ATTEMPTS = 2
 
 # Squelch held open: wfm.c forces snr_enable on, so the only way to keep a
@@ -151,7 +165,7 @@ class Vfo:
         # preset -> SSRC. One channel per preset, each created once and only
         # retuned, so nothing is ever removed mid-session and no re-creation
         # can land inside radiod's purge. See _ensure_channel_exists.
-        self._by_preset: Dict[str, int] = {}
+        self._by_preset: Dict[tuple, int] = {}
         self.freq_hz: Optional[float] = None
         self.preset: Optional[str] = None
         self.sample_rate: Optional[int] = None
@@ -355,7 +369,12 @@ class Vfo:
         # channel that has been alive all along. The cost is one idle
         # demodulator per preset the session has visited -- at most three or
         # four -- and `close()` sweeps them all at shutdown.
-        held = self._by_preset.get(preset)
+        # A wfm channel is keyed by station as well as preset, because it
+        # cannot be retuned (see RECREATE_ON_RETUNE); everything else is keyed
+        # by preset alone and retuned freely within its band.
+        key = (preset, freq_hz) if preset in RECREATE_ON_RETUNE else (preset,)
+
+        held = self._by_preset.get(key)
         if held is not None:
             if self.control.poll_channel(held, timeout=2.0) is not None:
                 changed = (held != self.ssrc)
@@ -363,12 +382,15 @@ class Vfo:
                 self.preset = preset
                 return changed
             # radiod forgot it (a restart); fall through and make a new one.
-            self._by_preset.pop(preset, None)
+            self._by_preset.pop(key, None)
             if self.ssrc == held:
                 self.ssrc = None
 
-        if self.preset not in (None, preset):
-            # Moving to a different preset's channel. The old one stays put.
+        if self.preset not in (None, preset) or preset in RECREATE_ON_RETUNE:
+            # Either we are moving to a different preset's channel, or this
+            # preset needs one per station and the lookup above just told us
+            # we have none for THIS station. Either way the channel we are
+            # currently holding is not the one to use.
             self.ssrc = None
 
         if self.ssrc is not None:
@@ -410,7 +432,7 @@ class Vfo:
         if matching:
             self.ssrc = matching[0].ssrc
             self.preset = preset
-            self._by_preset[preset] = self.ssrc
+            self._by_preset[key] = self.ssrc
             logger.info(
                 f"Adopted existing {preset} channel SSRC {self.ssrc} as the VFO"
             )
@@ -426,7 +448,7 @@ class Vfo:
             gain=0.0, destination=self.destination, encoding=Encoding.OPUS,
         )
         self.preset = preset
-        self._by_preset[preset] = self.ssrc
+        self._by_preset[key] = self.ssrc
         born = self.control.poll_channel(self.ssrc, timeout=2.0)
         if born is not None and (getattr(born, "frequency", None) or 0) == 0:
             logger.warning(
@@ -501,13 +523,25 @@ class Vfo:
         # correctly (LO 91.3000, IF +0.0). One stranded channel does the same.
         # Parking them on the current frequency keeps every channel inside the
         # window and costs a demodulator that nobody listens to.
-        for other_preset, other_ssrc in self._by_preset.items():
+        for other_key, other_ssrc in list(self._by_preset.items()):
             if other_ssrc == self.ssrc:
+                continue
+            if other_key[0] in RECREATE_ON_RETUNE:
+                # Cannot be parked: retuning it is exactly what kills it, and
+                # a dead channel left on its old frequency still holds part of
+                # the window. Drop it. Its SSRC includes the station, so
+                # coming back to that station creates a distinct one rather
+                # than re-creating this one into its own purge.
+                try:
+                    self.control.remove_channel(other_ssrc)
+                except Exception as e:
+                    logger.debug(f"dropping {other_key} channel: {e}")
+                self._by_preset.pop(other_key, None)
                 continue
             try:
                 self.control.set_frequency(other_ssrc, freq_hz)
             except Exception as e:
-                logger.debug(f"parking {other_preset} channel: {e}")
+                logger.debug(f"parking {other_key} channel: {e}")
         # 3. ...then the preset, which restarts the demodulator in place --
         # which is also the retry, and is why the retry never destroys the VFO.
         if preset != self.preset or restart_demod:
