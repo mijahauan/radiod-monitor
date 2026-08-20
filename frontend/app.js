@@ -354,7 +354,7 @@ function buildPopup(st) {
     const btn = document.createElement('button');
     btn.textContent = 'Listen Live';
     btn.style.cssText = 'margin-top:10px; padding:5px; font-size:0.8rem;';
-    btn.addEventListener('click', () => listenToStation(st.freq_hz, st.name));
+    btn.addEventListener('click', () => listenToStation(st.freq_hz));
     root.appendChild(btn);
 
     return root;
@@ -421,11 +421,21 @@ function setAudioStatus(text) {
     if (audioRepeaterFreq) audioRepeaterFreq.textContent = text;
 }
 
+// Looks up a station's display name by frequency the same way markers are
+// keyed (markers[freq_hz]) -- ground truth for "what is actually playing"
+// is the frequency the backend just confirmed via "tuned", not whatever name
+// was passed to tune() at click time, which can go stale under rapid clicks.
+function stationNameForFreq(freqHz) {
+    const st = stationsData.find(s => s.freq_hz === freqHz);
+    return st ? st.name : `${(freqHz / 1e6).toFixed(3)} MHz`;
+}
+
 class AudioSession {
     constructor() {
         this.freqHz = null;
         this.numChannels = 1;
         this.ws = null;
+        this._ready = null;      // promise resolved once this.ws is OPEN
         this.audioContext = null;
         this.decoder = null;
         this.pending = [];
@@ -433,7 +443,6 @@ class AudioSession {
         this.playing = false;
         this.stopped = false;
         this.tuning = false;
-        this.pendingName = '';
     }
 
     async start() {
@@ -446,17 +455,42 @@ class AudioSession {
         if (this.audioContext.state === 'suspended') {
             try { await this.audioContext.resume(); } catch (_) {}
         }
+        if (this.audioContext.state !== 'running') {
+            // Autoplay policy refused the resume even inside the click
+            // gesture that started this session -- give the user the manual
+            // fallback rather than leaving playback silently stalled.
+            resumeAudioBtn.classList.remove('hidden');
+        }
         this._rxCount = 0;
         this._decodeErrCount = 0;
         // The decoder is (re)created per "tuned" message, not here — there is
         // no station yet, so no channel count to configure it with.
+        this._openSocket();
+    }
 
+    // Opens the WebSocket and wires its handlers. Split out from start() so
+    // tune() can call it again on demand if the socket has died -- there is
+    // no background reconnect timer, so this is the only path back to a live
+    // socket, and it never runs concurrently with another open socket
+    // because it is only invoked when this.ws is null/CLOSED/CLOSING.
+    _openSocket() {
         const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         this.ws = new WebSocket(`${proto}//${window.location.host}/ws/audio`);
         this.ws.binaryType = 'arraybuffer';
-        this.ws.onopen    = () => console.log('Audio WS open');
-        this.ws.onerror   = (e) => console.warn('Audio WS error', e);
-        this.ws.onclose   = () => console.log('Audio WS closed');
+        this._ready = new Promise((resolve) => {
+            this.ws.onopen = () => { console.log('Audio WS open'); resolve(); };
+        });
+        this.ws.onerror = (e) => console.warn('Audio WS error', e);
+        this.ws.onclose = () => {
+            console.log('Audio WS closed');
+            this.ws = null;
+            this._ready = null;
+            // Without this the session sits on a dead socket forever: every
+            // later Listen click would hit the same silent "not open" guard
+            // tune() has to protect against. Surface it and let tune()
+            // reopen on the next request instead.
+            if (!this.stopped) setAudioStatus('audio connection lost — click Listen to reconnect');
+        };
         this.ws.onmessage = (ev) => {
             if (this.stopped) return;
             if (typeof ev.data === 'string') {
@@ -469,6 +503,18 @@ class AudioSession {
                 // between a tune and its decoder reset) have no decoder to
                 // go to. Opus frames are self-contained, so dropping the
                 // first few costs at most a few ms of audio.
+                return;
+            }
+            if (this.tuning) {
+                // The backend starts streaming RTP from the new station as
+                // soon as it appears -- up to its ~1.5s settle window --
+                // before it broadcasts "tuned". The decoder is still
+                // configured for the *previous* station's channel count
+                // until that message resets it, so a mono->stereo (or
+                // stereo->mono) retune would otherwise feed frames of the
+                // wrong channel count to a decoder that will throw on them.
+                // This is not cosmetic: it is the boundary that keeps a
+                // retune from crashing the decoder.
                 return;
             }
             this._rxCount++;
@@ -488,27 +534,40 @@ class AudioSession {
         };
     }
 
-    async tune(freqHz, name) {
-        this.pendingName = name;
+    async tune(freqHz) {
         this.tuning = true;
         this.pending = [];
         this.playing = false;
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            this.ws.send(JSON.stringify({ tune: freqHz }));
+        if (!this.ws || this.ws.readyState === WebSocket.CLOSED || this.ws.readyState === WebSocket.CLOSING) {
+            this._openSocket();
         }
+        await this._ready;
+        if (this.stopped) return;
+        this.ws.send(JSON.stringify({ tune: freqHz }));
     }
 
     _onControlMessage(text) {
         let msg;
         try { msg = JSON.parse(text); } catch (_) { return; }
         if (msg.type === 'tuned') {
-            this.tuning = false;
             this.freqHz = msg.freq_hz;
             this._resetDecoder(msg.channels || 1);
-            setAudioStatus(`${this.pendingName || ''} ${(msg.freq_hz/1e6).toFixed(1)} MHz`);
+            // Cleared only after the decoder has been reconfigured for the
+            // new station, so it stays true across the whole window in
+            // which stray frames of the old channel count could still
+            // arrive (see the "tuning" guard in onmessage above).
+            this.tuning = false;
+            // The name comes from a fresh lookup by freq_hz, not from
+            // whatever the caller of tune() said at click time -- a second
+            // Listen click before this "tuned" arrives would otherwise
+            // caption station A with station B's name. Falls back to the
+            // frequency when the station isn't in the current result set
+            // (e.g. a second tab joining a stream someone else tuned).
+            audioRepeaterCallsign.textContent = stationNameForFreq(msg.freq_hz);
+            setAudioStatus(`${(msg.freq_hz/1e6).toFixed(3)} MHz`);
         } else if (msg.type === 'nosignal') {
             this.tuning = false;
-            setAudioStatus(`no signal on ${(msg.freq_hz/1e6).toFixed(1)} MHz`);
+            setAudioStatus(`no signal on ${(msg.freq_hz/1e6).toFixed(3)} MHz`);
         } else if (msg.type === 'error') {
             this.tuning = false;
             setAudioStatus(msg.message);
@@ -594,8 +653,7 @@ class AudioSession {
 
 let audioSession = null;
 
-async function listenToStation(freqHz, name) {
-    audioRepeaterCallsign.textContent = name;
+async function listenToStation(freqHz) {
     audioPanel.classList.remove('hidden');
     resumeAudioBtn.classList.add('hidden');
     if (!audioSession) {
@@ -609,11 +667,17 @@ async function listenToStation(freqHz, name) {
             return;
         }
     }
+    // No optimistic callsign here -- it's set from the "tuned" confirmation
+    // (by freq_hz, not by whatever was clicked), so it never has to be
+    // corrected out from under a rapid second click.
     setAudioStatus('tuning…');
-    await audioSession.tune(freqHz, name);
+    await audioSession.tune(freqHz);
+    // openPopup() already replaces whatever popup is open, so there is
+    // nothing to close first -- a compensating map.closePopup() here would
+    // run (this function is async) after any caller's own re-open of this
+    // same marker and just close what was meant to stay open.
     const marker = markers[freqHz];
     if (marker) marker.openPopup();
-    map.closePopup();
 }
 window.listenToStation = listenToStation;  // popup onclick
 
@@ -737,13 +801,9 @@ function freqStripClick(ev) {
     for (const st of stationsData) {
         if (Math.abs(st.freq_hz - hz) < Math.abs(best.freq_hz - hz)) best = st;
     }
-    listenToStation(best.freq_hz, best.name);
-    // listenToStation() closes any open popup on the map; re-open the one
-    // for the station we just picked so the map and the strip agree on
-    // what's selected. Guarded: markers is keyed by freq_hz and a station
-    // just added to the strip could in principle not have a marker yet.
-    const marker = markers[best.freq_hz];
-    if (marker) marker.openPopup();
+    // listenToStation() already opens this marker's popup once the station
+    // is selected; no compensating re-open needed here.
+    listenToStation(best.freq_hz);
 }
 
 // Nearest-tick hover: a floating label near the cursor, not the canvas
