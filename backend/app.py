@@ -94,11 +94,14 @@ async def activity_monitor():
                             pass
 
             # The window read/broadcast runs every cycle regardless of
-            # whether any channels exist: read_window() can resolve an SSRC
-            # from the anchor channel alone, which is precisely the case
-            # (directory mode) where active_channels is empty but the
+            # whether any channels exist: FrontEndWindow.read() can resolve
+            # an SSRC from the anchor channel alone, which is precisely the
+            # case (directory mode) where active_channels is empty but the
             # frequency strip most needs the window position.
-            window = await asyncio.to_thread(controller.read_window)
+            ssrc_hint = next(iter(controller.active_channels), None)
+            window = await asyncio.to_thread(
+                controller.window.read, controller.control, ssrc_hint
+            )
             if window:
                 low_hz, high_hz = window
                 wmsg = {
@@ -302,17 +305,14 @@ async def _handle_search(websocket: WebSocket, data: Dict[str, Any]):
         # ManagedStream would otherwise keep re-creating it against the next
         # search's removals — see AudioStreamer.drop_unmonitored.
         await streamer.drop_unmonitored(controller.monitored_freqs)
-        # If the mode switch also dropped the focused frequency, clear focus:
-        # the anchor channel is exempt from the stale-channel sweep in
-        # _apply_stations_locked (that is what keeps it from being deleted
-        # out from under a listener), so without this it would sit there
-        # holding the front end on a station nobody can reach any more,
-        # surviving every later search until shutdown.
-        focused = controller.focused_freq_hz
-        if focused is not None and not any(
-            abs(f - focused) < 1.0 for f in controller.monitored_freqs
-        ):
-            controller.clear_focus()
+        # A mode switch may leave the anchor centred on a frequency that no
+        # longer belongs to this search. The anchor channel is exempt from
+        # the stale-channel sweep in _apply_stations_locked (that is what
+        # keeps it from being deleted out from under a listener), so without
+        # this it would sit there holding the front end on a station nobody
+        # can reach any more, surviving every later search until shutdown.
+        # The next Listen recentres it via FrontEndWindow.centre_on.
+        controller.window.release(controller.control)
 
     asyncio.create_task(_converge())
 
@@ -393,7 +393,7 @@ async def websocket_audio(websocket: WebSocket, freq_hz: float):
         if await streamer.remove_listener(freq_hz, queue):
             # Nobody is listening any more, so stop pinning the front end to
             # this station; the next Listen re-aims it.
-            controller.clear_focus()
+            controller.window.release(controller.control)
 
 
 # ---------------------------------------------------------------------------

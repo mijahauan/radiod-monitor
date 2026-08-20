@@ -7,11 +7,13 @@ import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend.radio_controller import RadioController
+from backend.window import FrontEndWindow
 
 
 def _controller(usable_bw_hz):
     c = RadioController.__new__(RadioController)   # no radiod connection
-    c.usable_bw_hz = usable_bw_hz
+    c.window = FrontEndWindow()
+    c.window.usable_bw_hz = usable_bw_hz
     return c
 
 
