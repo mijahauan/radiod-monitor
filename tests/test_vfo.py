@@ -35,6 +35,7 @@ class FakeControl:
 
     def _maybe_raise(self, name):
         if self.raise_on == name:
+            self.calls.append((f"{name}:raised",))
             raise RuntimeError("Not connected to radiod")
 
     def create_channel(self, **kw):
@@ -156,14 +157,21 @@ def test_the_ssrc_is_the_one_the_library_allocated(monkeypatch):
     assert v.ssrc in c.known
 
 
-def test_tune_centres_the_window_before_setting_frequency(monkeypatch):
+def test_tune_centres_the_window_after_setting_frequency(monkeypatch):
+    """Centre LAST. Measured on the HF+ retuning 162.400 nfm -> 102.300 wfm,
+    three runs each: centring first gives IF -219.2 kHz every time (radiod's
+    edge-parking position for wfm), centring last gives IF +0.0 kHz every
+    time. set_preset restarts the demod and wfm.c re-runs set_freq at demod
+    start, which re-parks the channel and drags the LO off whatever we had
+    centred; nothing re-runs set_freq after the preset, so centring there
+    holds."""
     monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
     c, v = make()
     asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
     names = [x[0] for x in c.calls]
     assert "centre_on" in names and "set_frequency" in names
-    assert names.index("centre_on") < names.index("set_frequency"), (
-        "a demod that starts at the window edge never recovers"
+    assert names.index("set_frequency") < names.index("centre_on"), (
+        "centring before the preset restart does not survive it"
     )
 
 
@@ -443,15 +451,17 @@ def test_stop_releases_the_window_anchor():
 # window edge produces plausible fragments of audio, which is exactly the
 # failure mode this project has already been burned by.
 # ---------------------------------------------------------------------------
-def test_the_channel_is_created_inside_an_already_centred_window(monkeypatch):
+def test_the_window_is_centred_after_the_channel_exists(monkeypatch):
+    """The anchor's whole purpose is to rescue a channel radiod has ALREADY
+    parked at the window edge, by moving the LO onto it so every channel
+    recalculates its IF against the new LO. CLAUDE.md's original measurement
+    (IF +219.2 / snr -inf / ~17 frames per 10 s before the anchor, IF +0.0 /
+    snr 6.5 / 500 frames after) is a description of exactly this order."""
     monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
     c, v = make()
     asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
     names = [x[0] for x in c.calls]
-    assert names.index("centre_on") < names.index("create_channel"), (
-        "a wfm demod that STARTS parked at the window edge does not recover "
-        "when the window later moves onto it"
-    )
+    assert names.index("create_channel") < names.index("centre_on")
 
 
 def test_frequency_is_set_before_the_preset_restarts_the_demod(monkeypatch):
@@ -470,7 +480,7 @@ def test_frequency_is_set_before_the_preset_restarts_the_demod(monkeypatch):
     )
 
 
-def test_the_full_tune_order_is_centre_create_frequency_preset(monkeypatch):
+def test_the_full_tune_order_is_create_frequency_preset_then_centre(monkeypatch):
     monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
     c, v = make()
     asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
@@ -478,8 +488,8 @@ def test_the_full_tune_order_is_centre_create_frequency_preset(monkeypatch):
     ordered = [n for n in names
                if n in ("centre_on", "create_channel", "set_frequency",
                         "set_output_encoding")]
-    assert ordered == ["centre_on", "create_channel", "set_frequency",
-                       "set_output_encoding"]
+    assert ordered == ["create_channel", "set_frequency",
+                       "set_output_encoding", "centre_on"]
 
 
 # ---------------------------------------------------------------------------
@@ -500,7 +510,10 @@ def test_a_radiod_error_during_a_tune_becomes_nosignal(monkeypatch):
     assert result["freq_hz"] == 102_300_000.0
     assert "Not connected to radiod" in result["reason"]
     assert q.get_nowait() == result
-    assert len([x for x in c.calls if x[0] == "centre_on"]) == 1, (
+    assert [x for x in c.calls if x[0] == "centre_on"] == [], (
+        "the channel never came up, so there is nothing to centre on"
+    )
+    assert len([x for x in c.calls if x[0] == "create_channel:raised"]) == 1, (
         "reported and stopped -- not retried in a loop"
     )
 

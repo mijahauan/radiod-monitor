@@ -182,3 +182,62 @@ def test_centre_on_breaks_the_first_listen_deadlock():
         "and then retuned to the computed anchor frequency, not left at freq_hz"
     )
     assert w.anchor_ssrc == 0xF00D
+
+
+def test_a_station_already_near_centre_does_not_move_the_window():
+    """Moving the LO restarts radiod's placement and disturbs a demod that is
+    already producing audio. Every NWR channel is within 75 kHz of every other,
+    so switching inside that band must leave the window alone."""
+    import backend.window as W
+
+    class C:
+        def __init__(self):
+            self.calls = []
+        def poll_status(self, ssrc, timeout=2.0):
+            class S:
+                frequency = 162_400_000.0
+                class frontend:
+                    first_lo = 162_400_000.0
+            return S()
+        def ensure_channel(self, **kw):
+            self.calls.append("ensure_channel"); raise AssertionError("must not create")
+        def set_frequency(self, *a):
+            self.calls.append("set_frequency"); raise AssertionError("must not retune")
+        def set_squelch(self, *a, **k):
+            self.calls.append("set_squelch")
+
+    w = W.FrontEndWindow()
+    w.low_edge_hz, w.high_edge_hz = -330_240.0, 330_240.0
+    w.usable_bw_hz = 660_480.0
+    w.anchor_ssrc = 0xABCD          # an anchor already exists
+    c = C()
+    # 75 kHz off the LO: the far end of the NWR band, well within tolerance.
+    assert w.centre_on(c, 162_475_000.0, "239.9.9.9", 48000, ssrc_hint=1) is True
+    assert c.calls == [], "no radiod commands for a station already in view"
+
+
+def test_a_station_outside_the_tolerance_does_move_the_window():
+    import backend.window as W
+
+    class C:
+        def __init__(self):
+            self.retuned = []
+        def poll_status(self, ssrc, timeout=2.0):
+            class S:
+                frequency = 162_400_000.0
+                class frontend:
+                    first_lo = 162_400_000.0
+            return S()
+        def set_frequency(self, ssrc, hz):
+            self.retuned.append(hz)
+        def set_squelch(self, *a, **k):
+            pass
+
+    w = W.FrontEndWindow()
+    w.low_edge_hz, w.high_edge_hz = -330_240.0, 330_240.0
+    w.usable_bw_hz = 660_480.0
+    w.anchor_ssrc = 0xABCD
+    c = C()
+    # A different band entirely -- must recentre.
+    assert w.centre_on(c, 102_300_000.0, "239.9.9.9", 48000, ssrc_hint=1) is True
+    assert c.retuned, "a station outside the tolerance must move the window"

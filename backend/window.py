@@ -28,6 +28,17 @@ logger = logging.getLogger(__name__)
 # plus set_freq's 1 kHz fudge.
 ANCHOR_MARGIN_HZ = 6_000.0
 
+# How far off centre a station may sit before it is worth moving the window.
+# Moving the LO restarts radiod's placement and disturbs a demodulator that is
+# already producing audio, so re-centring for a station that is comfortably
+# inside the window costs audio and buys nothing. As a fraction of the window
+# half-width: at 25% on the HF+'s 660.5 kHz window that is +/-82.5 kHz, which
+# still leaves wfm's +/-192 kHz composite path inside the window
+# (82.5 + 192 = 274.5 < 330.2), so the tolerance is safe for the widest demod
+# this app uses. All seven NWR channels sit within 75 kHz of each other, so a
+# station-to-station switch inside that band now leaves the LO alone.
+RECENTRE_TOLERANCE = 0.25
+
 # Assumed window when radiod does not report FE_LOW_EDGE/FE_HIGH_EDGE.
 DEFAULT_USABLE_BW_HZ = 8_000_000.0
 
@@ -198,6 +209,17 @@ class FrontEndWindow:
         low_hz, high_hz = window
         centre = (low_hz + high_hz) / 2.0
         current_lo = centre - (self.low_edge_hz + self.high_edge_hz) / 2.0
+        half_span = (self.high_edge_hz - self.low_edge_hz) / 2.0
+        if abs(freq_hz - current_lo) <= half_span * RECENTRE_TOLERANCE:
+            # Already comfortably inside. Leave the LO alone -- see
+            # RECENTRE_TOLERANCE.
+            logger.debug(
+                f"centre_on: {freq_hz/1e6:.3f} MHz is "
+                f"{(freq_hz-current_lo)/1e3:+.1f} kHz off centre; not moving "
+                f"the window"
+            )
+            return True
+
         anchor_hz = choose_anchor_frequency(
             freq_hz, current_lo, self.low_edge_hz, self.high_edge_hz
         )
