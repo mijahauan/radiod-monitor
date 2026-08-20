@@ -23,7 +23,7 @@ import math
 import os
 import re
 from contextlib import asynccontextmanager
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
@@ -54,6 +54,42 @@ ACTIVITY_POLL_INTERVAL = 2.0  # seconds
 
 controller = RadioController(radiod_host=DEFAULT_RADIOD_HOST)
 active_websockets: List[WebSocket] = []
+
+# How long the app keeps the radio after the last control socket closes.
+# A browser reload disconnects and reconnects within a second, so releasing
+# immediately would churn channels for nothing; waiting forever leaves the
+# VFO parked on a station, dragging the shared front-end window to it long
+# after anyone is listening. Also comfortably longer than radiod's ~20 s
+# channel purge, so a reconnect cannot land on an SSRC still being reaped.
+IDLE_RELEASE_SEC = 30.0
+_idle_release_task: Optional[asyncio.Task] = None
+
+
+def _cancel_idle_release():
+    global _idle_release_task
+    if _idle_release_task is not None:
+        _idle_release_task.cancel()
+        _idle_release_task = None
+
+
+def _schedule_idle_release():
+    """Hand the radio back if nobody comes back within the grace period."""
+    global _idle_release_task
+    _cancel_idle_release()
+
+    async def _later():
+        try:
+            await asyncio.sleep(IDLE_RELEASE_SEC)
+        except asyncio.CancelledError:
+            return
+        if active_websockets or controller.vfo.listeners:
+            return          # someone came back, or is still listening
+        try:
+            await controller.release_idle()
+        except Exception as e:
+            logger.warning(f"idle release failed: {e}")
+
+    _idle_release_task = asyncio.create_task(_later())
 
 
 # ---------------------------------------------------------------------------
@@ -243,6 +279,7 @@ async def sources():
 @app.websocket("/ws/control")
 async def websocket_control(websocket: WebSocket):
     await websocket.accept()
+    _cancel_idle_release()
     active_websockets.append(websocket)
     try:
         while True:
@@ -259,6 +296,8 @@ async def websocket_control(websocket: WebSocket):
     finally:
         if websocket in active_websockets:
             active_websockets.remove(websocket)
+        if not active_websockets:
+            _schedule_idle_release()
 
 
 async def _handle_search(websocket: WebSocket, data: Dict[str, Any]):

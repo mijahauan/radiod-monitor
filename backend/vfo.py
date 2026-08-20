@@ -54,6 +54,15 @@ MAX_OPUS_FRAME_BYTES = 1275
 # How long to wait for RTP after a tune before deciding the demod did not come
 # up, and how many times to restart it in place.
 TUNE_SETTLE_SEC = 2.5
+
+# RTP already in flight when a retune is issued belongs to the PREVIOUS
+# station: radiod has sent those 20 ms packets, they are in the socket buffer,
+# and they keep arriving for a few tens of milliseconds. Counting them as
+# evidence the new station came up made a mode switch report "tuned" in 0.00 s
+# and then deliver 11 frames in 8 s -- success declared on the sound of the
+# station we just left. Frames are discarded for this long after the retune
+# commands land, before any are counted.
+TUNE_FLUSH_SEC = 0.15
 MAX_TUNE_ATTEMPTS = 2
 
 # Squelch held open: wfm.c forces snr_enable on, so the only way to keep a
@@ -130,12 +139,14 @@ class Vfo:
     """One retunable channel plus its listener fan-out."""
 
     def __init__(self, control, window, destination: str,
-                 anchor_destination: str, settle_sec: float = TUNE_SETTLE_SEC):
+                 anchor_destination: str, settle_sec: float = TUNE_SETTLE_SEC,
+                 flush_sec: float = TUNE_FLUSH_SEC):
         self.control = control
         self.window = window
         self.destination = destination
         self.anchor_destination = anchor_destination
         self.settle_sec = settle_sec
+        self.flush_sec = flush_sec
         self.ssrc: Optional[int] = None
         self.freq_hz: Optional[float] = None
         self.preset: Optional[str] = None
@@ -219,13 +230,18 @@ class Vfo:
                               "reason": _short_reason(e)}
                     self._broadcast_message(result)
                     return result
-                # Zeroed only now: RTP from the PREVIOUS station can still be
-                # arriving while _tune_once runs (it blocks in a worker
-                # thread while the event loop keeps delivering old frames),
-                # and counting those would make a dead new station look live.
-                self._frames_seen = 0
                 if self._stream is None:
                     await self._start_stream()
+                # Let the previous station's in-flight RTP drain before any
+                # frame counts as evidence. Zeroing the counter the instant
+                # _tune_once returns is not enough: radiod has already put
+                # those 20 ms packets on the wire, and they keep arriving for
+                # tens of milliseconds afterwards. Measured before this: a
+                # mode switch from 162.400 nfm to 91.300 wfm reported its
+                # first frame at 0.00 s -- the sound of the station being left
+                # -- then delivered 11 frames in 8 s.
+                await asyncio.sleep(self.flush_sec)
+                self._frames_seen = 0
                 await self._settle()
                 if self._frames_seen > 0:
                     self.sample_rate = sample_rate

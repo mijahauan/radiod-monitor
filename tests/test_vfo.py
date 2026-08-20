@@ -111,7 +111,7 @@ class SilentVfo(FakeVfo):
 def make():
     c = FakeControl()
     v = FakeVfo(control=c, window=FakeWindow(), destination="239.1.2.3",
-                anchor_destination="239.9.9.9", settle_sec=0.01)
+                anchor_destination="239.9.9.9", settle_sec=0.01, flush_sec=0.0)
     return c, v
 
 
@@ -147,7 +147,7 @@ def test_the_ssrc_is_the_one_the_library_allocated(monkeypatch):
 
     c.create_channel = spy
     v = FakeVfo(control=c, window=FakeWindow(), destination="239.1.2.3",
-                anchor_destination="239.9.9.9", settle_sec=0.01)
+                anchor_destination="239.9.9.9", settle_sec=0.01, flush_sec=0.0)
     asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
     created = [x for x in c.calls if x[0] == "create_channel"]
     assert len(created) == 1
@@ -236,7 +236,7 @@ def test_an_existing_channel_on_the_vfo_destination_is_adopted(monkeypatch):
                         lambda *a, **k: {left_behind.ssrc: left_behind})
     c = FakeControl(known={0x9999})
     v = FakeVfo(control=c, window=FakeWindow(), destination="239.1.2.3",
-                anchor_destination="239.9.9.9", settle_sec=0.01)
+                anchor_destination="239.9.9.9", settle_sec=0.01, flush_sec=0.0)
     asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
     assert v.ssrc == 0x9999
     assert not any(x[0] == "create_channel" for x in c.calls), (
@@ -318,7 +318,7 @@ def test_tune_reports_nosignal_after_exhausting_retries(monkeypatch):
     monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
     c = FakeControl()
     v = SilentVfo(control=c, window=FakeWindow(), destination="239.1.2.3",
-                  anchor_destination="239.9.9.9", settle_sec=0.01)
+                  anchor_destination="239.9.9.9", settle_sec=0.01, flush_sec=0.0)
     result = asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
     assert result == {"type": "nosignal", "freq_hz": 102_300_000.0}
     tune_attempts = [x for x in c.calls if x[0] == "set_frequency"]
@@ -410,7 +410,7 @@ def test_tune_broadcasts_nosignal_to_every_listener(monkeypatch):
     monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
     c = FakeControl()
     v = SilentVfo(control=c, window=FakeWindow(), destination="239.1.2.3",
-                  anchor_destination="239.9.9.9", settle_sec=0.01)
+                  anchor_destination="239.9.9.9", settle_sec=0.01, flush_sec=0.0)
     q = asyncio.Queue()
     v.listeners.append(q)
     result = asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
@@ -502,7 +502,7 @@ def test_a_radiod_error_during_a_tune_becomes_nosignal(monkeypatch):
     monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
     c = FakeControl(raise_on="create_channel")
     v = FakeVfo(control=c, window=FakeWindow(), destination="239.1.2.3",
-                anchor_destination="239.9.9.9", settle_sec=0.01)
+                anchor_destination="239.9.9.9", settle_sec=0.01, flush_sec=0.0)
     q = asyncio.Queue()
     v.listeners.append(q)
     result = asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
@@ -522,7 +522,7 @@ def test_a_tune_with_no_control_connection_is_reported_not_crashed():
     """close() clears vfo.control. Without the guard this AttributeError'd and
     the user was told "Malformed tune request." -- a lie."""
     v = FakeVfo(control=None, window=FakeWindow(), destination="239.1.2.3",
-                anchor_destination="239.9.9.9", settle_sec=0.01)
+                anchor_destination="239.9.9.9", settle_sec=0.01, flush_sec=0.0)
     result = asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
     assert result["type"] == "nosignal"
     assert "radiod" in result["reason"]
@@ -533,7 +533,7 @@ def test_a_failure_to_centre_is_reported_as_the_reason(monkeypatch):
     c = FakeControl()
     v = SilentVfo(control=c, window=FakeWindow(centres=False),
                   destination="239.1.2.3", anchor_destination="239.9.9.9",
-                  settle_sec=0.01)
+                  settle_sec=0.01, flush_sec=0.0)
     result = asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
     assert result == {"type": "nosignal", "freq_hz": 102_300_000.0,
                       "reason": "could not centre the receiver's window"}
@@ -546,7 +546,7 @@ def test_a_centred_tune_that_hears_nothing_has_no_reason(monkeypatch):
     c = FakeControl()
     v = SilentVfo(control=c, window=FakeWindow(centres=True),
                   destination="239.1.2.3", anchor_destination="239.9.9.9",
-                  settle_sec=0.01)
+                  settle_sec=0.01, flush_sec=0.0)
     result = asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
     assert "reason" not in result
 
@@ -618,3 +618,31 @@ def test_tuned_reaches_a_listener_whose_queue_is_full(monkeypatch):
     while not q.empty():
         items.append(q.get_nowait())
     assert result in items
+
+
+def test_in_flight_frames_from_the_previous_station_do_not_count(monkeypatch):
+    """A retune reports success only on RTP that arrived AFTER the flush.
+
+    Measured before this guard: a mode switch from 162.400 MHz nfm to
+    91.300 MHz wfm reported its first frame at 0.00 s -- packets radiod had
+    already sent for the station being left -- then delivered 11 frames in
+    8 s. "Tuned" meant "I can still hear the old station".
+    """
+    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
+    c = FakeControl()
+
+    class StaleVfo(Vfo):
+        """Frames arrive during the retune and then stop, as a dead station."""
+        async def _start_stream(self):
+            self._stream = "fake-stream"
+
+        def _tune_once(self, *a, **kw):
+            super()._tune_once(*a, **kw)
+            self._frames_seen = 7      # the previous station, still in flight
+
+    v = StaleVfo(control=c, window=FakeWindow(), destination="239.1.2.3",
+                 anchor_destination="239.9.9.9", settle_sec=0.01, flush_sec=0.0)
+    result = asyncio.run(v.tune(91_300_000.0, "wfm", 48000))
+    assert result["type"] == "nosignal", (
+        "frames from before the flush are the old station and prove nothing"
+    )

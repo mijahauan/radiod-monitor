@@ -429,6 +429,47 @@ class RadioController:
             except Exception as e:
                 logger.error(f"Failed to ensure channel for {freq_hz/1e6:.3f} MHz: {e}")
 
+    async def release_idle(self):
+        """Give the radio back when nobody is using the app.
+
+        Every channel shares one front-end window, so a VFO left parked on the
+        last station a listener chose keeps dragging the window to it -- the
+        app competing with itself for the receiver, and with any other client
+        of this radiod. Sensor channels are just as pointless with no control
+        socket connected to receive the activity they measure.
+
+        This is not `close()`: the controller stays connected and the next
+        search rebuilds in about a second. The VFO's channel IS removed and
+        its SSRC forgotten, which is the one place this deliberately accepts
+        radiod's ~20 s purge -- `_ensure_channel_exists` creates a fresh one
+        on the next tune, and the caller only reaches here after an idle
+        grace period, so nothing is waiting on it.
+        """
+        if not self.control:
+            return
+        try:
+            await self.vfo.stop()
+        except Exception as e:
+            logger.debug(f"release_idle: vfo stop: {e}")
+
+        ssrcs = set(self.active_channels)
+        if self.vfo.ssrc is not None:
+            ssrcs.add(self.vfo.ssrc)
+        for ssrc in ssrcs:
+            try:
+                await asyncio.to_thread(self.control.remove_channel, ssrc)
+            except Exception as e:
+                logger.debug(f"release_idle: remove {ssrc:08x}: {e}")
+        self.active_channels.clear()
+        self.monitored_freqs = set()
+        self.vfo.ssrc = None
+        self.vfo.preset = None
+        try:
+            await asyncio.to_thread(self.window.release, self.control)
+        except Exception as e:
+            logger.debug(f"release_idle: window release: {e}")
+        logger.info(f"Idle: released {len(ssrcs)} channels and the anchor")
+
     async def close(self):
         """Release every channel this app owns on radiod.
 
