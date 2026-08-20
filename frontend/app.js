@@ -567,7 +567,13 @@ class AudioSession {
             setAudioStatus(`${(msg.freq_hz/1e6).toFixed(3)} MHz`);
         } else if (msg.type === 'nosignal') {
             this.tuning = false;
-            setAudioStatus(`no signal on ${(msg.freq_hz/1e6).toFixed(3)} MHz`);
+            // The backend distinguishes "the demod came up but nothing is
+            // there" from "we could not centre the window", "radiod refused",
+            // and "your station is not in the search you just ran". Dropping
+            // the reason on the floor turns all four into the same shrug.
+            const where = `${(msg.freq_hz/1e6).toFixed(3)} MHz`;
+            setAudioStatus(msg.reason ? `no signal on ${where} — ${msg.reason}`
+                                      : `no signal on ${where}`);
         } else if (msg.type === 'error') {
             this.tuning = false;
             setAudioStatus(msg.message);

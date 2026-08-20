@@ -57,6 +57,42 @@ SQUELCH_OPEN_DB = -20.0
 SQUELCH_CLOSE_DB = -25.0
 
 
+def _short_reason(exc: BaseException) -> str:
+    """One short line for the "reason" field of a nosignal message."""
+    text = str(exc).strip().splitlines()[0] if str(exc).strip() else ""
+    if not text:
+        text = type(exc).__name__
+    return text[:120]
+
+
+def put_control(queue: "asyncio.Queue", msg: dict) -> None:
+    """Enqueue a control dict, displacing audio rather than being dropped.
+
+    Control messages share the listener queue with Opus frames. They are not
+    interchangeable: the browser ignores every frame until a "tuned" message
+    reconfigures its decoder, so a dropped "tuned" on a briefly stalled socket
+    means permanent silence until the next click, while a dropped audio frame
+    costs 20 ms nobody notices. On overflow, throw away one queued item and
+    retry.
+    """
+    try:
+        queue.put_nowait(msg)
+        return
+    except asyncio.QueueFull:
+        pass
+    try:
+        queue.get_nowait()
+    except asyncio.QueueEmpty:
+        pass
+    try:
+        queue.put_nowait(msg)
+    except asyncio.QueueFull:
+        logger.warning(
+            f"listener queue still full; dropped control message "
+            f"{msg.get('type')!r}"
+        )
+
+
 def opus_channels(frame: bytes) -> Optional[int]:
     """Channel count from an Opus frame's TOC byte (RFC 6716 §3.1, bit 2)."""
     if not frame:
@@ -83,14 +119,18 @@ class Vfo:
         self._stream = None
         self._frames_seen = 0
         self._non_opus_warned = False
+        # Whether the last _tune_once managed to place the window on the
+        # target. False is a distinguishable cause of "no signal" and is
+        # reported as such rather than papered over.
+        self._centred = True
         self._lock = asyncio.Lock()
 
     # -- listeners ---------------------------------------------------------
     async def add_listener(self, queue: asyncio.Queue) -> None:
         self.listeners.append(queue)
         if self.channels and self.freq_hz is not None:
-            queue.put_nowait({"type": "tuned", "freq_hz": self.freq_hz,
-                              "channels": self.channels})
+            put_control(queue, {"type": "tuned", "freq_hz": self.freq_hz,
+                                "channels": self.channels})
 
     async def remove_listener(self, queue: asyncio.Queue) -> bool:
         if queue in self.listeners:
@@ -125,9 +165,27 @@ class Vfo:
                 # the retune -- WebCodecs throws if the header lies about it.
                 self.channels = None
             self.freq_hz = freq_hz
+            self._centred = True
             for attempt in range(1, MAX_TUNE_ATTEMPTS + 1):
-                await asyncio.to_thread(self._tune_once, freq_hz, preset,
-                                        sample_rate, attempt > 1)
+                try:
+                    await asyncio.to_thread(self._tune_once, freq_hz, preset,
+                                            sample_rate, attempt > 1)
+                except Exception as e:
+                    # radiod refused, went away, or the control socket is
+                    # closed. The spec is explicit: report nosignal with a
+                    # reason and stop -- do not retry in a loop, and above all
+                    # do not let this propagate, because the caller is one of
+                    # two tasks sharing the audio WebSocket and an escaping
+                    # exception tears the socket down with no explanation.
+                    logger.warning(
+                        f"Tuning {freq_hz/1e6:.3f} MHz failed: "
+                        f"{type(e).__name__}: {e}"
+                    )
+                    self.sample_rate = sample_rate
+                    result = {"type": "nosignal", "freq_hz": freq_hz,
+                              "reason": _short_reason(e)}
+                    self._broadcast_message(result)
+                    return result
                 # Zeroed only now: RTP from the PREVIOUS station can still be
                 # arriving while _tune_once runs (it blocks in a worker
                 # thread while the event loop keeps delivering old frames),
@@ -148,6 +206,12 @@ class Vfo:
                 )
             self.sample_rate = sample_rate
             result = {"type": "nosignal", "freq_hz": freq_hz}
+            if not self._centred:
+                # centre_on returned False: edges unprobed, the anchor is
+                # unreadable, or it could not be placed. Any of the three
+                # leaves a wideband demod outside the window, which is the
+                # single most likely reason no RTP followed.
+                result["reason"] = "could not centre the receiver's window"
             self._broadcast_message(result)
             return result
 
@@ -158,10 +222,7 @@ class Vfo:
     def _broadcast_message(self, msg: dict) -> None:
         """Enqueue a control dict (tuned/nosignal) to every listener queue."""
         for q in self.listeners:
-            try:
-                q.put_nowait(msg)
-            except asyncio.QueueFull:
-                pass
+            put_control(q, msg)
 
     def _ensure_channel_exists(self, freq_hz: float, preset: str,
                                sample_rate: int) -> bool:

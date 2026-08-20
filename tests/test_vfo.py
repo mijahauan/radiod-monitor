@@ -402,6 +402,7 @@ def test_stop_releases_the_window_anchor():
     asyncio.run(v.stop())
     assert ("release",) in c.calls
 
+
 # ---------------------------------------------------------------------------
 # Tuning ORDER. Both of these fail against the shipped implementation, which
 # created the channel before centring and sent set_preset before
@@ -446,3 +447,101 @@ def test_the_full_tune_order_is_centre_create_frequency_preset(monkeypatch):
                         "set_output_encoding")]
     assert ordered == ["centre_on", "create_channel", "set_frequency",
                        "set_output_encoding"]
+
+
+# ---------------------------------------------------------------------------
+# radiod-side failures during a tune
+# ---------------------------------------------------------------------------
+def test_a_radiod_error_during_a_tune_becomes_nosignal(monkeypatch):
+    """It must not propagate: the caller is one of two tasks sharing the audio
+    WebSocket, so an escaping exception tears the socket down and the browser
+    shows "audio connection lost" with no reason."""
+    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
+    c = FakeControl(raise_on="create_channel")
+    v = FakeVfo(control=c, window=FakeWindow(), destination="239.1.2.3",
+                anchor_destination="239.9.9.9", settle_sec=0.01)
+    q = asyncio.Queue()
+    v.listeners.append(q)
+    result = asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
+    assert result["type"] == "nosignal"
+    assert result["freq_hz"] == 102_300_000.0
+    assert "Not connected to radiod" in result["reason"]
+    assert q.get_nowait() == result
+    assert len([x for x in c.calls if x[0] == "centre_on"]) == 1, (
+        "reported and stopped -- not retried in a loop"
+    )
+
+
+def test_a_tune_with_no_control_connection_is_reported_not_crashed():
+    """close() clears vfo.control. Without the guard this AttributeError'd and
+    the user was told "Malformed tune request." -- a lie."""
+    v = FakeVfo(control=None, window=FakeWindow(), destination="239.1.2.3",
+                anchor_destination="239.9.9.9", settle_sec=0.01)
+    result = asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
+    assert result["type"] == "nosignal"
+    assert "radiod" in result["reason"]
+
+
+def test_a_failure_to_centre_is_reported_as_the_reason(monkeypatch):
+    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
+    c = FakeControl()
+    v = SilentVfo(control=c, window=FakeWindow(centres=False),
+                  destination="239.1.2.3", anchor_destination="239.9.9.9",
+                  settle_sec=0.01)
+    result = asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
+    assert result == {"type": "nosignal", "freq_hz": 102_300_000.0,
+                      "reason": "could not centre the receiver's window"}
+
+
+def test_a_centred_tune_that_hears_nothing_has_no_reason(monkeypatch):
+    """"No signal" and "we could not point the radio at it" are different
+    things and must stay distinguishable."""
+    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
+    c = FakeControl()
+    v = SilentVfo(control=c, window=FakeWindow(centres=True),
+                  destination="239.1.2.3", anchor_destination="239.9.9.9",
+                  settle_sec=0.01)
+    result = asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
+    assert "reason" not in result
+
+
+# ---------------------------------------------------------------------------
+# Control messages vs. the frame queue
+# ---------------------------------------------------------------------------
+def test_a_control_message_displaces_audio_rather_than_being_dropped():
+    """frontend/app.js ignores every frame until a "tuned" configures its
+    decoder, so a dropped "tuned" is permanent silence; a dropped Opus frame
+    is 20 ms nobody notices."""
+    q = asyncio.Queue(maxsize=3)
+    for _ in range(3):
+        q.put_nowait(b"frame")
+    msg = {"type": "tuned", "freq_hz": 102_300_000.0, "channels": 1}
+    vfo_mod.put_control(q, msg)
+    items = []
+    while not q.empty():
+        items.append(q.get_nowait())
+    assert msg in items
+    assert len(items) == 3, "one frame was displaced, not appended"
+
+
+def test_put_control_leaves_a_roomy_queue_alone():
+    q = asyncio.Queue(maxsize=10)
+    q.put_nowait(b"frame")
+    msg = {"type": "tuned"}
+    vfo_mod.put_control(q, msg)
+    assert q.get_nowait() == b"frame"
+    assert q.get_nowait() == msg
+
+
+def test_tuned_reaches_a_listener_whose_queue_is_full(monkeypatch):
+    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
+    c, v = make()
+    q = asyncio.Queue(maxsize=2)
+    q.put_nowait(b"a")
+    q.put_nowait(b"b")
+    v.listeners.append(q)
+    result = asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
+    items = []
+    while not q.empty():
+        items.append(q.get_nowait())
+    assert result in items

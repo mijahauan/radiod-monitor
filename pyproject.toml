@@ -18,5 +18,10 @@ dependencies = [
     "ka9q-python>=3.25.1",
 ]
 
+[project.optional-dependencies]
+# tests/test_audio_ws.py drives /ws/audio through FastAPI's TestClient, which
+# starlette implements on top of httpx. Nothing in the running app needs it.
+test = ["pytest", "httpx"]
+
 [tool.setuptools]
 packages = ["backend", "backend.sources"]

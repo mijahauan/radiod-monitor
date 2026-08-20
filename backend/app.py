@@ -35,6 +35,7 @@ from ka9q.discovery import discover_radiod_services
 
 from .geo import parse_location
 from .radio_controller import RadioController
+from .vfo import put_control
 from . import sources as source_registry
 
 logging.basicConfig(level=logging.INFO)
@@ -204,12 +205,10 @@ async def radiod_select(body: HostSelect):
     # vfo.stop(), so a redundant call here would be silent. Without this the
     # browser just goes quiet with no indication why.
     if controller.vfo.freq_hz is not None:
-        nosignal = {"type": "nosignal", "freq_hz": controller.vfo.freq_hz}
+        nosignal = {"type": "nosignal", "freq_hz": controller.vfo.freq_hz,
+                    "reason": f"switching to {new_host}"}
         for q in controller.vfo.listeners:
-            try:
-                q.put_nowait(nosignal)
-            except asyncio.QueueFull:
-                pass
+            put_control(q, nosignal)
     await controller.close()
     controller.radiod_host = new_host
     try:
@@ -283,9 +282,10 @@ async def _handle_search(websocket: WebSocket, data: Dict[str, Any]):
         })
         return
 
-    # Squelch (applied immediately — synchronous on RadiodControl, fast
-    # enough not to need to_thread).
-    controller.set_squelch(squelch_db)
+    # Squelch (applied immediately). It iterates active_channels issuing a
+    # command per channel, and send_command retries with backoff, so it is a
+    # blocking radiod call like every other one -- off the loop it goes.
+    await asyncio.to_thread(controller.set_squelch, squelch_db)
 
     stations = source.list_stations(lat, lon, radius_km, params)
 
@@ -293,6 +293,18 @@ async def _handle_search(websocket: WebSocket, data: Dict[str, Any]):
     # rather than read back from apply_stations because results are sent
     # first: the converge task runs in the background.
     activity_available = controller.fits_window(s.freq_hz for s in stations)
+
+    # Published synchronously, before the results reach the browser and before
+    # _converge is even scheduled. These three fields are what a Listen click
+    # is validated and tuned against; _apply_stations_locked sets them too,
+    # but it runs in a worker thread behind a lock a previous converge may
+    # still hold. The browser gets the station list first either way, so an
+    # eager click landed in that gap and was rejected with "not currently
+    # monitored" for a station visibly on screen -- or tuned with the previous
+    # source's preset, which for an FM station under `nfm` is silence.
+    controller.monitored_freqs = {float(s.freq_hz) for s in stations}
+    controller.preset = source.preset
+    controller.sample_rate = source.sample_rate
 
     await websocket.send_json({
         "type": "results",
@@ -333,8 +345,24 @@ async def _handle_search(websocket: WebSocket, data: Dict[str, Any]):
         # window out from under whoever is currently listening on an
         # anchored station, which is the "search cuts off audio" regression
         # this project already fixed once.
+        # A mode switch rebuilds the sensor set on a new band, and every
+        # ensure_channel makes radiod re-place the front end. A listener tuned
+        # to a station from the PREVIOUS search falls out of the window and
+        # simply goes quiet -- no nosignal, no UI change, nothing above DEBUG.
+        # Tell them, then release the VFO so the anchor can be dropped below.
+        vfo_freq = controller.vfo.freq_hz
+        if vfo_freq is not None and not any(
+                abs(f - vfo_freq) < 1.0 for f in controller.monitored_freqs):
+            stale = {"type": "nosignal", "freq_hz": vfo_freq,
+                     "reason": "station is not in the current search"}
+            for q in controller.vfo.listeners:
+                put_control(q, stale)
+            await controller.vfo.stop()
+
         if controller.vfo.freq_hz is None:
-            controller.window.release(controller.control)
+            # remove_channel on the control socket: blocking, like the rest.
+            await asyncio.to_thread(controller.window.release,
+                                    controller.control)
 
     asyncio.create_task(_converge())
 
@@ -384,14 +412,11 @@ async def websocket_audio(websocket: WebSocket):
                     continue
                 freq_hz = float(freq_hz)
                 if not any(abs(f - freq_hz) < 1.0 for f in controller.monitored_freqs):
-                    try:
-                        queue.put_nowait({
-                            "type": "error",
-                            "message": f"{freq_hz/1e6:.3f} MHz is not currently monitored — "
-                                       f"run a search first.",
-                        })
-                    except asyncio.QueueFull:
-                        pass
+                    put_control(queue, {
+                        "type": "error",
+                        "message": f"{freq_hz/1e6:.3f} MHz is not currently monitored — "
+                                   f"run a search first.",
+                    })
                     continue
                 # tune() broadcasts "tuned"/"nosignal" to every listener
                 # queue itself (Vfo._broadcast_message); the return value is
@@ -403,13 +428,10 @@ async def websocket_audio(websocket: WebSocket):
             except (ValueError, TypeError, KeyError, AttributeError,
                     json.JSONDecodeError) as e:
                 logger.debug(f"audio ws: malformed command {msg!r}: {e}")
-                try:
-                    queue.put_nowait({
-                        "type": "error",
-                        "message": "Malformed tune request.",
-                    })
-                except asyncio.QueueFull:
-                    pass
+                put_control(queue, {
+                    "type": "error",
+                    "message": "Malformed tune request.",
+                })
 
     sender = asyncio.create_task(_pump())
     commands = asyncio.create_task(_commands())

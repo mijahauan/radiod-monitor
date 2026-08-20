@@ -207,10 +207,24 @@ WS   /ws/control                       ← JSON messages
 WS   /ws/audio
   → {"tune": <freq_hz>}
   ← {"type": "tuned",    "freq_hz": N, "channels": 1|2}
-  ← {"type": "nosignal", "freq_hz": N}
+  ← {"type": "nosignal", "freq_hz": N, "reason": "..."}   (reason optional)
   ← {"type": "error",    "message": "..."}
   ← one binary message per Opus frame
 ```
+
+`nosignal` carries a `reason` whenever one is known — radiod refused or is
+unreachable, the window could not be centred, or the station is not in the
+current search (a mode switch moves the front end out from under a listener).
+A bare `nosignal` means the tune itself succeeded and nothing came back. The
+browser appends the reason to the status line; the distinction is the whole
+point, so do not collapse them.
+
+Control dicts share the 200-slot listener queue with Opus frames, and they are
+not interchangeable: the browser ignores every frame until a `tuned`
+reconfigures its decoder, so a dropped `tuned` is permanent silence while a
+dropped frame costs 20 ms. `vfo.put_control()` therefore displaces a queued
+item rather than dropping the message, and every control-message enqueue in
+the backend goes through it.
 
 ## Known quirks
 
