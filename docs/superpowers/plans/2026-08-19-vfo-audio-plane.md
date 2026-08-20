@@ -1358,6 +1358,9 @@ git commit -m "feat(ui): one audio socket for the session, tuned per station"
 
 **Files:**
 - Modify: `CLAUDE.md`
+- Modify: `README.md`
+- Modify: `backend/radio_controller.py` (comments only)
+- Modify: `backend/sources/base.py` (comments only)
 
 - [ ] **Step 1: Replace the audio-plane section**
 
@@ -1419,6 +1422,9 @@ check misled Task 3's implementer. Fix each in place:
   once per listener,"
 - `backend/sources/base.py:78` — the `audio_channels` note referencing
   `audio_streamer.opus_channels()`, now `backend/vfo.py`'s `opus_channels()`
+- `README.md:34` — still lists `backend/audio_streamer.py` in the file
+  overview; replace the entry with `backend/vfo.py` and `backend/window.py`,
+  and check the rest of the README for the per-station audio socket
 
 Re-word each to name the VFO or `backend/vfo.py`; do not simply delete the
 sentences, as each carries a fact that is still true.
@@ -1427,14 +1433,14 @@ sentences, as each carries a fact that is still true.
 
 ```bash
 cd /home/mjh/git/radiod-monitor
-grep -rn "audio_streamer\|AudioStreamer\|focus_on\|ws/audio/{freq" CLAUDE.md backend/ frontend/
+grep -rn "audio_streamer\|AudioStreamer\|focus_on\|ws/audio/{freq" CLAUDE.md README.md backend/ frontend/
 ```
 Expected: empty.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add CLAUDE.md backend/radio_controller.py backend/sources/base.py
+git add CLAUDE.md README.md backend/radio_controller.py backend/sources/base.py
 git commit -m "docs: the audio plane is one retunable VFO"
 ```
 
