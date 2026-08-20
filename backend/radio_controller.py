@@ -7,7 +7,9 @@ objects to monitor. For each station it calls ensure_channel on a
 stable app-scoped multicast destination, which makes the SSRC a
 deterministic hash of (freq, preset, sample_rate, encoding, destination,
 gain=0.0) so the SSRC survives server restarts and is independently
-reachable from AudioStreamer with the same arguments.
+reachable by anyone who recomputes the hash with the same arguments (the
+VFO in backend/vfo.py does not do this -- it never computes an SSRC,
+it holds whatever create_channel() allocates it).
 
 Per-user settings (squelch) are applied after channel creation so they
 don't perturb the SSRC hash.
@@ -57,9 +59,10 @@ class RadioController:
         self.preset: str = "nfm"
         self.sample_rate: int = 48000
         # Number of audio channels the current preset emits (1 for all
-        # narrow-band modes, 2 for wfm). AudioStreamer reads this when
-        # creating new ManagedStreams; the frontend reads it via
-        # /api/sources to configure WebCodecs AudioDecoder.
+        # narrow-band modes, 2 for wfm). Only a hint: the frontend reads it
+        # via /api/sources to seed WebCodecs AudioDecoder before any audio
+        # arrives, but the VFO (backend/vfo.py) overrides it with ground
+        # truth read from the first Opus frame's TOC byte once tuned.
         self.audio_channels: int = 1
         # Whether SNR-based squelch is meaningful for the active preset.
         # wfm does not publish SNR so SNR-squelched channels never open.
@@ -374,9 +377,10 @@ class RadioController:
                 # costs a full discover_channels() poll, and a search creates
                 # one channel per station -- nine of them for NWS -- which adds
                 # seconds to every search for a check that does not gate
-                # anything on this path.  The audio plane re-asserts and *does*
-                # verify in AudioStreamer._assert_opus, once per listener,
-                # which is the only path whose bytes reach a decoder.
+                # anything on this path.  These are sensor channels; no audio
+                # is ever decoded from them.  The VFO (backend/vfo.py) is the
+                # only channel whose bytes reach a decoder, and it re-asserts
+                # OUTPUT_ENCODING = OPUS on every tune -- see Vfo._tune_once.
                 try:
                     self.control.set_output_encoding(ssrc, Encoding.OPUS)
                 except Exception as enc_err:

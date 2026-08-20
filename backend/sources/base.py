@@ -73,9 +73,9 @@ class Source:
     # Channel count hint for the UI. It is NOT what configures the decoder:
     # a source cannot know the answer, because the wfm preset ships
     # `mono = yes` in some ka9q-radio installs and stereo in others, and
-    # ChannelInfo carries no channel count. The audio plane reads the truth
-    # from the first Opus frame's TOC byte and sends it to the browser --
-    # see audio_streamer.opus_channels().
+    # ChannelInfo carries no channel count. The VFO (backend/vfo.py) reads
+    # the truth from the first Opus frame's TOC byte and sends it to the
+    # browser -- see vfo.opus_channels().
     audio_channels: int = 1
 
     # Whether SNR-based squelch is meaningful for this source. ka9q-radio's

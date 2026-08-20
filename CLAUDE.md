@@ -104,7 +104,7 @@ Registry lives in [backend/sources/__init__.py](backend/sources/__init__.py); ad
 
 It is not what configures the decoder, because a source cannot know the answer: the `wfm` preset ships `mono = yes` in some ka9q-radio installs and stereo in others, and `ChannelInfo` carries no channel count. A wrong `numberOfChannels` makes WebCodecs throw on the first packet, so the value has to be ground truth.
 
-The authority is the stream itself. Every Opus packet states its channel count in bit 2 of its TOC byte (RFC 6716 §3.1); `audio_streamer.opus_channels()` reads it from the first frame, and the audio WebSocket sends `{"type": "config", "channels": N}` as a text message ahead of any binary frame. The browser configures `AudioDecoder` on that message and ignores frames until it arrives (Opus frames are self-contained, so the few dropped cost a few ms). A listener joining a stream already in progress is handed the stored value on connect.
+The authority is the stream itself. Every Opus packet states its channel count in bit 2 of its TOC byte (RFC 6716 §3.1); `backend/vfo.py`'s `opus_channels()` reads it from the first frame, latched onto `Vfo.channels`. The audio WebSocket sends `{"type": "tuned", "freq_hz": N, "channels": N}` ahead of any binary frame for the newly-tuned station. The browser configures `AudioDecoder` on that message and ignores frames until it arrives (Opus frames are self-contained, so the few dropped cost a few ms). A listener joining a stream already in progress is handed the stored value on connect.
 
 ### The receiver's window is the app's problem, not the user's
 
@@ -132,8 +132,9 @@ the whole HF spectrum on a direct-sampling RX888.
 The frequency strip in the UI draws each station at its frequency and the
 window at its **measured** position, broadcast as `{type: "window"}` by the
 activity monitor. Never infer that position from what the app believes it set:
-`focus_on()`'s anchor mechanism exists precisely because radiod's real
-placement differed from the obvious model.
+`FrontEndWindow.centre_on()`'s anchor mechanism (`backend/window.py`) exists
+precisely because radiod's real placement differed from the obvious model —
+see the anchor-channel notes further down this file.
 
 **Other clients compete.** The front end is global to the radiod instance.
 `ka9q-web` against the same radiod requests its own window and drags the
@@ -153,15 +154,21 @@ Identical in shape to the aligned nws-monitor/repeater-monitor, just generalized
 
 2. **Activity monitor — [backend/app.py](backend/app.py) `activity_monitor()`.** Background task polling `discover_channels(radiod_host)` every 2 s, reading `ChannelInfo.snr`, and broadcasting `{type: "activity", freq, isActive, snr}` to all connected control-WebSocket clients. `isActive` is `snr > 3.0 dB`. Looks up channels by SSRC, falls back to frequency match within 100 Hz. This is what flips map markers green.
 
-3. **Audio plane — [backend/audio_streamer.py](backend/audio_streamer.py).** One `ManagedStream` per frequency, shared across browser listeners via `asyncio.Queue`s. radiod is configured with `Encoding.OPUS`, `sample_rate=48000`, `samples_per_packet=960` (20 ms), `deliver_interval_packets=1`, and **`raw_payloads=True`** — ka9q-python's transport mode for framed encodings, where `on_samples` receives a `List[bytes]` of undecoded RTP payloads with the resequencer bypassed (a codec frame is opaque: it can be neither concatenated nor zero-filled, and gap concealment belongs to the decoder). With `deliver_interval_packets=1` that is exactly one encoded frame per call.
+3. **Audio plane — [backend/vfo.py](backend/vfo.py), one retunable VFO.** There is exactly one radiod channel a listener ever hears, `Vfo`, owned by `RadioController` and shared by every browser listener via `asyncio.Queue` fan-out. It is created once and **retuned, never recreated**, across every station switch and every mode switch — that rule is load-bearing, not stylistic. Destroying a radiod channel starts a ~20 s asynchronous purge (`radio.c` reaps a channel only once its frequency is zero, after `Channel_idle_timeout`); re-creating the same SSRC inside that window hands back a channel radiod is still tearing down, which never produces RTP. Every "switching is broken" symptom this project hit before the VFO traces back to that cycle.
 
-   **The Opus grant must be asserted, not assumed.** `ensure_channel(encoding=OPUS)` is not sufficient: radiod applies the preset's default output encoding (s16be) and honours OPUS only from a follow-up `OUTPUT_ENCODING` command. It must also be asserted *before* the receiver starts — assert it afterwards and the first packets on the socket are PCM, which is then forwarded to the browser labelled as Opus. `add_listener` therefore calls `ensure_channel` + `_assert_opus` (which verifies the grant) before constructing the `ManagedStream`, and `on_stream_restored` re-asserts it because a re-created channel comes back on the preset default. As a backstop, `_broadcast` drops any payload over 1275 bytes — the RFC 6716 maximum for a single Opus frame — and logs it, so a lost grant is loud instead of silent. Each frame is shipped to the browser as a single WebSocket binary message on `WS /ws/audio/{freq_hz}`. No Ogg container, no tagging, no server-side decoding — WebSocket/TCP preserves frame order and the browser uses WebCodecs `AudioDecoder`. `on_stream_restored` re-applies squelch because only hash-stable parameters survive a radiod restart.
+   **The app never computes the SSRC.** `create_channel()` allocates one and `Vfo` stores the opaque integer, handing it back to the library on every later command — the app's vocabulary is frequency, preset, and sample rate, never transport identity. The stream is a `RadiodStream` bound to that stored SSRC, not a `ManagedStream` bound to a frequency: only the former keeps delivering across a retune, because `ManagedStream` re-derives its own SSRC from frequency and preset on every restore and so cannot follow a channel whose frequency it didn't choose.
+
+   **The window is centred before the frequency is set.** `Vfo._tune_once` calls `FrontEndWindow.centre_on()` (`backend/window.py`) before `set_frequency()`, because a demodulator that starts parked at the window edge does not recover once the window later moves onto it — see the anchor-channel notes further down this file. If no RTP arrives within `TUNE_SETTLE_SEC` (1.5 s), `Vfo.tune()` retries by reissuing the preset command — which makes radiod restart the demod in place, still on the same SSRC — up to `MAX_TUNE_ATTEMPTS` (2) before giving up and broadcasting `{"type": "nosignal"}`.
+
+   radiod is configured with `Encoding.OPUS`, `sample_rate=48000`, `samples_per_packet=960` (20 ms), `deliver_interval_packets=1`, and **`raw_payloads=True`** — ka9q-python's transport mode for framed encodings, where `on_samples` receives a `List[bytes]` of undecoded RTP payloads with the resequencer bypassed (a codec frame is opaque: it can be neither concatenated nor zero-filled, and gap concealment belongs to the decoder). With `deliver_interval_packets=1` that is exactly one encoded frame per call.
+
+   **The Opus grant must be asserted, not assumed.** Creating or retuning a channel is not sufficient: radiod applies the preset's default output encoding (s16be) and honours OPUS only from a follow-up `OUTPUT_ENCODING` command, and it must be asserted *before* the receiver starts — assert it afterwards and the first packets on the socket are PCM, forwarded to the browser labelled as Opus. `Vfo._tune_once` calls `set_output_encoding(ssrc, Encoding.OPUS)` on every tune for exactly this reason. As a backstop, `Vfo._broadcast` drops any payload over 1275 bytes — the RFC 6716 maximum for a single Opus frame — and logs it once, so a lost grant is loud instead of silent. Each frame is shipped to the browser as a single WebSocket binary message on `WS /ws/audio`. No Ogg container, no tagging, no server-side decoding — WebSocket/TCP preserves frame order and the browser uses WebCodecs `AudioDecoder`.
 
    **WebCodecs requires a secure context** (HTTPS or `localhost`) — the shell script auto-generates a self-signed cert to satisfy this.
 
-### Frequency→SSRC coupling (the one cross-file invariant)
+### Sensor channels and the VFO (the one cross-file coupling left)
 
-`RadioController.apply_stations` and `AudioStreamer.add_listener` both call `ensure_channel`/`ManagedStream` and must pass *identical* `destination`, `encoding`, `sample_rate`, `preset`, and `gain=0.0`. `AudioStreamer` reads `preset` and `sample_rate` off the controller at stream creation time to keep them in lockstep. If you change how preset is selected (e.g. per-station instead of per-source), change it in both places and through the controller's `preset` attribute. `apply_stations()` and `add_listener()` must also both assert `OUTPUT_ENCODING = OPUS` after `ensure_channel` and verify the grant — radiod otherwise serves the preset default on whichever path skipped it. `audio_channels` is *not* part of this invariant any more: it is a display hint, and the decoder is configured from the first Opus frame's TOC byte instead.
+`RadioController.apply_stations()` (the per-station sensor channels, which exist only to report SNR and are never listened to) and `Vfo.tune()` (the single channel a listener actually hears) both live on `self.destination` and both run `Encoding.OPUS`. Unlike the old per-station-audio-channel design, `preset` and `sample_rate` can no longer drift between the two paths by accident: `websocket_audio`'s command loop reads them straight off `controller.preset`/`controller.sample_rate` on every `vfo.tune()` call, so the VFO always tunes with whatever `apply_stations()` most recently set for the active `Source` — there is no second copy to keep in lockstep by hand. What *does* still have to be kept true if you touch either path: both must assert `OUTPUT_ENCODING = OPUS` after creating/retuning a channel (radiod otherwise serves the preset default on whichever path skipped it), and both must stay on the same `self.destination` — that's what lets `_apply_stations_locked`'s stale-channel sweep find the VFO's SSRC in the same discovery pass it uses to clean up sensor channels, so it can exempt it explicitly (see below) rather than never seeing it at all. `audio_channels` is not part of this coupling: it is a display hint (see above), and the decoder is configured from the first Opus frame's TOC byte instead.
 
 ### Host switching
 
@@ -179,8 +186,11 @@ WS   /ws/control                       ← JSON messages
   ← {type: "window", low_hz, high_hz, center_hz}
   ← {type: "activity", freq, isActive, snr}
   ← {type: "error", message}
-WS   /ws/audio/{freq_hz}
-  ← {"type": "config", "channels": N}   (text, once, before any audio)
+WS   /ws/audio
+  → {"tune": <freq_hz>}
+  ← {"type": "tuned",    "freq_hz": N, "channels": 1|2}
+  ← {"type": "nosignal", "freq_hz": N}
+  ← {"type": "error",    "message": "..."}
   ← one binary message per Opus frame
 ```
 
@@ -215,8 +225,9 @@ Measured, same channel, same moment, before the upgrade:
 
 Hardware note: both radios are now attached. `radiod@airspy-generic` drives the
 wideband Airspy R2 (10 Msps, **4.1 MHz** usable window, `isreal=True`, window
-reported as −4700..−600 kHz — not centred on the LO, which is why `focus_on()`
-works from `fe_high_edge` rather than assuming symmetry). As of 2026-08-19 the
+reported as −4700..−600 kHz — not centred on the LO, which is why
+`backend/window.py`'s anchor placement is computed from the window's
+half-width rather than assuming symmetry — see fact below). As of 2026-08-19 the
 R2 hears nothing on VHF — NWR reads −9 to −22 dB against +17.6 dB on the HF+ —
 so it likely has no antenna connected. The HF+ is the receiver with the working
 VHF feed, at a 660.5 kHz window.
@@ -247,15 +258,48 @@ Getting there took three fixes and disproved three earlier guesses in this file
    `-inf`. The 111 kHz margin is identical on a 660 kHz HF+ window and a
    4.1 MHz R2 window, so no receiver is wide enough to escape it.
 
-   `focus_on()` fixes this with an **anchor channel** — see its docstring.
-   Placing a narrow `am` channel at `freq + (high_edge - 6 kHz)` makes radiod's
+   `backend/window.py`'s `FrontEndWindow` fixes this with an **anchor
+   channel** — see its module docstring and `choose_anchor_frequency()` for
+   the mechanics, and `FrontEndWindow.centre_on()`/`release()` for the
+   lifecycle. Placing a narrow `am` channel outside the window makes radiod's
    edge-parking of *that* channel leave the LO on our station; every other
    channel then recalculates its IF against the new LO, so the station sits at
    IF ≈ 0 with the whole composite inside the window. Measured at 102.300 MHz:
    IF +219.2 kHz / `snr=-inf` / ~17 frames per 10 s before, IF +0.0 kHz /
-   `snr` 6.5 / 500 frames per 10 s after. The anchor is squelched shut, is
-   exempt from the `apply_stations` stale sweep, and is dropped by
-   `clear_focus()`.
+   `snr` 6.5 / 500 frames per 10 s after.
+
+   Three facts belong here because each was expensive to learn and none is
+   visible from the code alone:
+
+   - **The anchor offset is half the window's WIDTH, not either edge**:
+     `target ± ((high_edge - low_edge)/2 - margin)`. The edge-based form
+     (`target + (high_edge - margin)`) is arithmetically identical only when
+     the window happens to be symmetric about the LO — which is why it
+     worked on the Airspy HF+ and hid the bug for so long — but on the R2,
+     whose window sits at −4700..−600 kHz, it places the anchor *inside* the
+     window, where radiod ignores it. Anchor placement fails **silently**:
+     no error, just a station that never comes up. Which side of the target
+     the anchor actually lands on depends on where the LO currently sits;
+     `choose_anchor_frequency()` computes both candidates and returns
+     whichever is genuinely outside the window.
+   - **The anchor lives on its own multicast destination**
+     (`radiod-monitor-anchor`), separate from the VFO's audio group. Sharing
+     one destination let the VFO's adopt-an-existing-channel scan mistake
+     the anchor for the VFO after a restart, which then "centred" the window
+     on wherever the anchor happened to be instead of the station the user
+     asked for. This separation is also why the anchor needs no exemption
+     from the stale-channel sweep, while **the VFO does** — see
+     `RadioController._apply_stations_locked`.
+   - **A channel radiod parks at the window edge cannot be rescued by
+     moving the window onto it afterwards** — the demodulator does not
+     recover. Centre first, then tune. This is why `Vfo._tune_once` calls
+     `centre_on()` before `set_frequency()`.
+
+   The anchor is squelched shut, created once and then retuned (never
+   recreated per station), and dropped by `FrontEndWindow.release()` when
+   the last audio listener disconnects. If radiod is ever fixed to reserve
+   the demodulator's real bandwidth around a channel, `backend/window.py`
+   collapses to just `probe()` and `read()` — no anchor needed.
 
    The idea came from ka9q-web, which runs a spectrum channel alongside its
    audio channel and so positions the front end without ever commanding the LO.

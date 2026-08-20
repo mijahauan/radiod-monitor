@@ -12,8 +12,8 @@ Supersedes the older `nws-monitor` and `repeater-monitor` apps by unifying their
     - **Commercial FM** — US FCC CDBS database (~11,000 stations), filtered by distance and 5 MHz band segment. Uses radiod's `wfm` preset (75 µs de-emphasis, 48 kHz stereo).
 - **Radiod instance discovery.** The sidebar dropdown lists every radiod instance advertising `_ka9q-ctl._udp` on the LAN (via mDNS). Switch between SDRs — for example, an Airspy R2 for VHF and an RX888 for HF — from the browser without restarting anything.
 - **Live activity indication.** A background task polls radiod's per-channel SNR every 2 s; map markers and the sidebar list flip to "active" green above a configurable threshold and back to idle blue when silent.
-- **Low-latency browser audio.** Raw Opus frames (20 ms @ 48 kHz mono) are forwarded over WebSocket and decoded with the browser's native WebCodecs `AudioDecoder`, scheduled on a Web Audio `AudioContext`. No Ogg muxing, no server-side decoding, ~100 ms jitter buffer.
-- **Self-healing streams.** Uses `ka9q-python`'s `ManagedStream`, which re-attaches to channels automatically across radiod restarts via deterministic SSRCs.
+- **Low-latency browser audio via a single retunable VFO.** One radiod channel per session, created once and *retuned* (never recreated) as you switch stations — raw Opus frames (20 ms @ 48 kHz, 1 or 2 channels depending on mode) are forwarded over one WebSocket and decoded with the browser's native WebCodecs `AudioDecoder`, scheduled on a Web Audio `AudioContext`. No Ogg muxing, no server-side decoding, ~100 ms jitter buffer. Switching stations costs two radiod commands, not a channel teardown/rebuild — audio resumes in about a second instead of after radiod's ~20 s channel-purge delay.
+- **Self-healing.** If radiod restarts, the VFO detects its SSRC is gone, adopts a leftover channel on its multicast group if one exists, or creates a fresh one — the browser's audio WebSocket doesn't need to reconnect. The per-station sensor channels that drive the activity map use `ka9q-python`'s deterministic SSRC hashing to reattach the same way.
 - **HTTPS out of the box.** The start script auto-generates a self-signed certificate on first run, because WebCodecs requires a secure context.
 
 ## Architecture
@@ -25,13 +25,14 @@ Browser (Leaflet + WebCodecs + Web Audio)
   ├── POST /api/radiod/select     — switch the backing radiod
   ├── GET  /api/sources           — list modes and their UI control schemas
   ├── WS   /ws/control            — search request + live activity updates (JSON)
-  └── WS   /ws/audio/{freq_hz}    — one Opus frame per binary message
+  └── WS   /ws/audio              — {"tune": freq_hz} in, one Opus frame per binary message out
   │
 FastAPI + Uvicorn  (backend/)
   │
   ├── app.py               — HTTP/WS routes, activity monitor
-  ├── radio_controller.py  — ensure_channel, front-end tune, squelch
-  ├── audio_streamer.py    — ManagedStream → Opus → WebSocket fan-out
+  ├── radio_controller.py  — sensor channels (ensure_channel), squelch
+  ├── vfo.py               — the one retunable channel a listener hears
+  ├── window.py            — front-end window probe/centre (anchor channel)
   ├── geo.py               — Maidenhead + haversine
   └── sources/             — pluggable frequency providers
       ├── base.py          — Source protocol, Station dataclass
