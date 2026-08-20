@@ -312,7 +312,17 @@ async def _handle_search(websocket: WebSocket, data: Dict[str, Any]):
         # this it would sit there holding the front end on a station nobody
         # can reach any more, surviving every later search until shutdown.
         # The next Listen recentres it via FrontEndWindow.centre_on.
-        controller.window.release(controller.control)
+        #
+        # Gated on there being no active listener: _converge() runs on
+        # *every* search, not just a mode switch (a radius tweak, a squelch
+        # change, a same-mode re-search all call it too), so releasing
+        # unconditionally would un-centre the window out from under whoever
+        # is currently listening on an anchored station — exactly the
+        # "search cuts off audio" regression this project already fixed
+        # once. Task 4 replaces this gate with `not controller.vfo.listeners`
+        # once the VFO owns listener tracking directly.
+        if not any(streamer.listeners.values()):
+            controller.window.release(controller.control)
 
     asyncio.create_task(_converge())
 

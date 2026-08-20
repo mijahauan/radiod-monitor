@@ -50,23 +50,23 @@ def choose_anchor_frequency(
     where the LO currently sits -- get it wrong and the anchor is a silent
     no-op, which costs the listener minutes of silence.
 
+    The candidate offset from target_hz is the window's HALF-WIDTH minus the
+    margin, not either edge individually: `target + (high_edge - margin)`
+    only centres the window when it happens to be symmetric about the LO
+    (low_edge == -high_edge). In general, when radiod parks the anchor
+    `margin_hz` inside whichever edge it retuned to, the LO ends up at
+    `candidate - (edge - margin)` -- which lands on target_hz from either
+    side only when the candidate is built from the half-span of the window,
+    not from one edge alone. Identical to the old edge-based expressions in
+    the symmetric case; correct for an asymmetric window too (e.g. the
+    Airspy R2's -4700..-600 kHz, which is nowhere near centred on the LO).
+
     Returns None when neither side is outside, which means the window is far
     wider than the offsets and needs no centring.
     """
-    high_side = target_hz + (high_edge_hz - margin_hz)
-    low_side = target_hz + (low_edge_hz + margin_hz)
-
-    # When the window doesn't cover target_hz at all -- possible whenever it
-    # isn't centred on the LO, e.g. a real-sampling front end whose edges sit
-    # entirely on one side -- the per-candidate check below can't tell,
-    # because a candidate built from target_hz itself always lands exactly
-    # margin_hz inside an edge when current_lo_hz == target_hz, regardless of
-    # which side of the LO the window actually occupies. In that situation
-    # the window must move no matter what, so skip straight to the
-    # deterministic high-side choice.
-    target_offset = target_hz - current_lo_hz
-    if not (low_edge_hz <= target_offset <= high_edge_hz):
-        return high_side
+    half_span = (high_edge_hz - low_edge_hz) / 2.0 - margin_hz
+    high_side = target_hz + half_span
+    low_side = target_hz - half_span
 
     for candidate in (high_side, low_side):
         offset = candidate - current_lo_hz
@@ -88,11 +88,19 @@ class FrontEndWindow:
         """Read FE_LOW_EDGE/FE_HIGH_EDGE. Costs one throwaway channel."""
         if control is None:
             return None
+        # Imported lazily: radio_controller imports FrontEndWindow at module
+        # level, so a top-level import here would be circular. See
+        # radio_controller.py's CHANNEL_LIFETIME_FRAMES docstring for why
+        # this matters -- without it radiod parks this channel at
+        # DEFAULT_LIFETIME (20 s) after we remove it, instead of reaping it
+        # within ~1 s.
+        from .radio_controller import CHANNEL_LIFETIME_FRAMES
         ssrc = None
         try:
             probe = control.ensure_channel(
                 frequency_hz=PROBE_FREQ_HZ, preset="am", sample_rate=sample_rate,
                 gain=0.0, destination=destination, encoding=Encoding.OPUS, timeout=5.0,
+                lifetime=CHANNEL_LIFETIME_FRAMES,
             )
             ssrc = probe.ssrc
             fe = self._frontend_of(control, ssrc)
@@ -148,9 +156,45 @@ class FrontEndWindow:
         """
         if control is None or self.low_edge_hz is None or self.high_edge_hz is None:
             return False
+        from .radio_controller import CHANNEL_LIFETIME_FRAMES
+
         window = self.read(control, ssrc_hint)
         if window is None:
-            return False
+            if self.anchor_ssrc is not None:
+                # An anchor exists but its status is unreadable right now --
+                # don't create a second one under it.
+                return False
+            # Directory mode's first Listen: no anchor and no active channel
+            # exist yet, so read() has no SSRC to poll at all and can never
+            # succeed no matter how long we wait. Break the deadlock by
+            # creating the anchor at freq_hz itself -- not yet where it
+            # belongs, but enough to give read() something to poll -- then
+            # fall through to the normal path, which will retune it to the
+            # frequency actually computed below.
+            try:
+                anchor = control.ensure_channel(
+                    frequency_hz=freq_hz, preset="am", sample_rate=sample_rate,
+                    gain=0.0, destination=destination,
+                    encoding=Encoding.OPUS, timeout=5.0,
+                    lifetime=CHANNEL_LIFETIME_FRAMES,
+                )
+                self.anchor_ssrc = anchor.ssrc
+                control.set_squelch(self.anchor_ssrc, enable=True,
+                                    open_snr_db=80.0, close_snr_db=75.0)
+            except Exception as e:
+                logger.warning(
+                    f"Could not place the initial anchor at "
+                    f"{freq_hz/1e6:.3f} MHz: {e}"
+                )
+                return False
+            window = self.read(control, ssrc_hint)
+            if window is None:
+                logger.warning(
+                    "centre_on: anchor created but its window is still "
+                    "unreadable"
+                )
+                return False
+
         low_hz, high_hz = window
         centre = (low_hz + high_hz) / 2.0
         current_lo = centre - (self.low_edge_hz + self.high_edge_hz) / 2.0
@@ -170,6 +214,7 @@ class FrontEndWindow:
                     frequency_hz=anchor_hz, preset="am", sample_rate=sample_rate,
                     gain=0.0, destination=destination,
                     encoding=Encoding.OPUS, timeout=5.0,
+                    lifetime=CHANNEL_LIFETIME_FRAMES,
                 )
                 self.anchor_ssrc = anchor.ssrc
                 control.set_squelch(self.anchor_ssrc, enable=True,
