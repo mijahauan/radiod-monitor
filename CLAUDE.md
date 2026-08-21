@@ -272,6 +272,24 @@ dropped frame costs 20 ms. `vfo.put_control()` therefore displaces a queued
 item rather than dropping the message, and every control-message enqueue in
 the backend goes through it.
 
+## Diagnosing silent failures
+
+`scripts/sniff_radiod.py` watches radiod's control commands and the RTP audio
+on one timeline. Every failure in this project looks identical from one side
+-- no audio -- and seeing only one half invites guessing: the commands alone
+cannot tell you whether radiod acted, and the RTP alone cannot tell you what
+was asked for. Watching both separates "radiod never sent it" from "we never
+received it", which is the first question worth answering.
+
+It is passive: it joins the groups and reads, sending nothing and creating no
+channels, so it is safe against a receiver someone is listening to.
+
+    scripts/sniff_radiod.py --host airspyhf-status.local --seconds 30
+
+It settled the wideband-FM question after five wrong hypotheses, by showing a
+channel start streaming immediately and the next tune begin 0.36 s later --
+the app was fine, the test harness was giving up mid-tune.
+
 ## Known quirks
 
 - **Markers are keyed by `freq_hz`** in the frontend (`markers[st.freq_hz]`). Two stations at identical downlink frequencies but different locations collide — last one wins for the icon and activity updates. Acceptable today, worth knowing.
