@@ -431,6 +431,22 @@ class Vfo:
         #    stranded in the band we came from.
         self._park_our_channels(freq_hz)
 
+        if preset in PRESETS_NEEDING_CENTRE:
+            # Centre BEFORE creating, so the demodulator starts inside a
+            # window that already covers its whole composite. Centring after
+            # creation also works, but only via the retry: the first attempt
+            # spends its whole settle on a channel that was born edge-parked
+            # and has to be restarted. That is what made an FM tune cost two
+            # settle cycles -- "tuned" at 6.7 s -- where one should do.
+            #
+            # ssrc_hint is whatever channel we still hold, which is all
+            # FrontEndWindow.read() needs to find the current LO; on the very
+            # first tune of a session it is None and centre_on takes its own
+            # deadlock-breaking path.
+            self.window.centre_on(self.control, freq_hz,
+                                  self.anchor_destination, sample_rate,
+                                  ssrc_hint=self.ssrc)
+
         if preset in RECREATE_ON_RETUNE:
             # This preset's channel cannot be reused: a wfm channel that has
             # been retuned is permanently dead, and parking it is a retune.
@@ -607,14 +623,6 @@ class Vfo:
         if preset != self.preset or restart_demod:
             self.control.set_preset(self.ssrc, preset)
             self.preset = preset
-        if preset in PRESETS_NEEDING_CENTRE:
-            # Centre AFTER the frequency and preset are set: `set_preset`
-            # restarts the demodulator and wfm.c re-runs set_freq at demod
-            # start, which re-parks the channel and drags the LO off anything
-            # centred earlier.
-            self.window.centre_on(self.control, freq_hz,
-                                  self.anchor_destination, sample_rate,
-                                  ssrc_hint=self.ssrc)
 
         self.control.set_output_encoding(self.ssrc, Encoding.OPUS)
         try:
