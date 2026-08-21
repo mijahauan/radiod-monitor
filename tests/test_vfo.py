@@ -88,6 +88,14 @@ class FakeWindow:
     def read(self, control, ssrc):
         return None
 
+    def centre_on(self, control, freq_hz, destination, sample_rate,
+                  ssrc_hint=None):
+        control.calls.append(("centre_on", freq_hz, destination))
+        return True
+
+    def release(self, control):
+        control.calls.append(("release",))
+
 
 class FakeVfo(Vfo):
     """A Vfo whose stream is a stand-in and whose RTP always arrives."""
@@ -100,14 +108,14 @@ class FakeVfo(Vfo):
         self.started += 1
         self._stream = "fake-stream"
 
-    async def _settle(self):
+    async def _settle(self, budget=None):
         self._frames_seen = 1  # pretend RTP followed the retune
 
 
 class SilentVfo(FakeVfo):
     """A Vfo whose stream never delivers RTP -- exercises the nosignal path."""
 
-    async def _settle(self):
+    async def _settle(self, budget=None):
         pass  # no RTP arrives; _frames_seen stays whatever tune() zeroed it to
 
 
@@ -432,7 +440,7 @@ def test_the_retry_reissues_the_preset_after_the_frequency(monkeypatch):
     c = FakeControl()
 
     class DeafVfo(FakeVfo):
-        async def _settle(self):
+        async def _settle(self, budget=None):
             return          # no frames ever, so both attempts run
 
     v = DeafVfo(control=c, window=FakeWindow(), destination="239.1.2.3", settle_sec=0.01, flush_sec=0.0)
@@ -637,7 +645,7 @@ def test_a_wfm_retry_asks_the_library_for_a_different_channel(monkeypatch):
     seen = []
 
     class DeafVfo(FakeVfo):
-        async def _settle(self):
+        async def _settle(self, budget=None):
             return                      # no frames, so both attempts run
 
     v = DeafVfo(control=c, window=FakeWindow(), destination="239.1.2.3", settle_sec=0.01, flush_sec=0.0)
@@ -671,3 +679,26 @@ def test_returning_to_an_fm_station_reuses_its_channel(monkeypatch):
     asyncio.run(v.tune(91_300_000.0, "wfm", 48000))     # and back
     assert v.ssrc == fm_ssrc, "the station's own channel, still alive"
     assert not any(x[0] == "create_channel" for x in c.calls)
+
+
+def test_only_presets_that_need_it_are_centred(monkeypatch):
+    """Centring costs a channel create and about a second, so it is spent only
+    where it buys something.
+
+    radiod decides a channel is in range by its FILTER width and parks it
+    inside an edge. wfm runs a 384 kHz composite needing more than its filter,
+    so an edge-parked wfm channel sputters -- measured on the HF+'s 660.5 kHz
+    window at 91.300 MHz, 45 frames edge-parked against 501 frames centred,
+    voice/hiss 496.9. Narrowband needs none of it: nfm at IF +323.0 kHz gives
+    301 frames and snr 12.0, and skipping the centring took NWS first audio
+    from 1.2-2.5 s to 0.08 s.
+    """
+    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
+    c, v = make()
+    asyncio.run(v.tune(162_400_000.0, "nfm", 48000))
+    assert not any(x[0] == "centre_on" for x in c.calls), "nfm is left where radiod puts it"
+    c.calls.clear()
+    asyncio.run(v.tune(91_300_000.0, "wfm", 48000))
+    centred = [x for x in c.calls if x[0] == "centre_on"]
+    assert len(centred) == 1, "wfm is centred"
+    assert centred[0][2] == v.anchor_destination, "and the anchor is not on the VFO's group"

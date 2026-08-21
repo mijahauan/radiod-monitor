@@ -75,6 +75,27 @@ TUNE_FLUSH_SEC = 0.15
 # being retuned. Narrowband presets do -- nfm retunes across the NWR band all
 # day -- so this is deliberately a small exception list, not a policy.
 RECREATE_ON_RETUNE = frozenset({"wfm"})
+
+# Presets whose demodulator needs more of the window than radiod's placement
+# guarantees, and which therefore have to be centred in it.
+#
+# radiod decides a channel is "in range" by its FILTER width and parks it
+# `filter.max_IF + fudge` inside an edge. `wfm` runs a 384 kHz composite path
+# needing +/-192 kHz, which is more than its filter, so an edge-parked wfm
+# channel loses part of that composite and sputters. Measured on the HF+'s
+# 660.5 kHz window at 91.300 MHz:
+#
+#     edge-parked (IF +219.2 kHz)   45 frames / 6 s, no SNR
+#     centred     (IF   +0.0 kHz)  501 frames, voice/hiss 496.9, env-var 0.60
+#
+# Narrowband presets need none of this: nfm at IF +323.0 kHz gives 301 frames
+# and snr 12.0. Centring costs a channel create and about a second, so it is
+# spent only where it buys something -- NWS first audio is 0.08 s without it.
+#
+# On a receiver with room the question does not arise: the R2's 4.1 MHz window
+# gives 601 frames at snr 29.1 from a plain create, because radiod's placement
+# already leaves the whole composite inside.
+PRESETS_NEEDING_CENTRE = frozenset({"wfm"})
 MAX_TUNE_ATTEMPTS = 2
 
 # Squelch held open: wfm.c forces snr_enable on, so the only way to keep a
@@ -151,11 +172,13 @@ class Vfo:
     """One retunable channel plus its listener fan-out."""
 
     def __init__(self, control, window, destination: str,
+                 anchor_destination: str = "",
                  settle_sec: float = TUNE_SETTLE_SEC,
                  flush_sec: float = TUNE_FLUSH_SEC):
         self.control = control
         self.window = window
         self.destination = destination
+        self.anchor_destination = anchor_destination or destination
         self.settle_sec = settle_sec
         self.flush_sec = flush_sec
         self.ssrc: Optional[int] = None
@@ -281,7 +304,7 @@ class Vfo:
                 # configures its decoder, which happens after this.
                 await asyncio.sleep(self.flush_sec)
                 self._frames_seen = 0
-                await self._settle()
+                await self._settle(self._settle_budget(preset))
                 if self._frames_seen > 0:
                     self.sample_rate = sample_rate
                     result = {"type": "tuned", "freq_hz": freq_hz,
@@ -289,7 +312,7 @@ class Vfo:
                     self._broadcast_message(result)
                     return result
                 logger.info(
-                    f"No RTP {self.settle_sec}s after tuning {freq_hz/1e6:.3f} MHz "
+                    f"No RTP {self._settle_budget(preset)}s after tuning {freq_hz/1e6:.3f} MHz "
                     f"(attempt {attempt}/{MAX_TUNE_ATTEMPTS})"
                 )
             self.sample_rate = sample_rate
@@ -297,7 +320,18 @@ class Vfo:
             self._broadcast_message(result)
             return result
 
-    async def _settle(self) -> None:
+    def _settle_budget(self, preset: str) -> float:
+        """How long to wait for RTP after a tune.
+
+        A centred tune needs longer: centring moves the local oscillator and
+        the demodulator restarts against the new placement. Measured on the
+        HF+ at 91.300 MHz, the channel came up healthy -- LO 91.3000, snr
+        14.3 -- but only after the 2.5 s budget had already expired, so the
+        app reported nosignal about a station that was working.
+        """
+        return self.settle_sec * (2.0 if preset in PRESETS_NEEDING_CENTRE else 1.0)
+
+    async def _settle(self, budget: Optional[float] = None) -> None:
         """Wait for RTP to appear after a retune, returning the moment it does.
 
         A fixed sleep was wrong in both directions. It reported success no
@@ -314,7 +348,7 @@ class Vfo:
         common one returns as fast as the radio does, and the slow one gets
         the full budget before anyone calls it dead. A seam for tests.
         """
-        deadline = time.monotonic() + self.settle_sec
+        deadline = time.monotonic() + (self.settle_sec if budget is None else budget)
         while time.monotonic() < deadline:
             if self._frames_seen > 0:
                 return
@@ -553,6 +587,15 @@ class Vfo:
         if preset != self.preset or restart_demod:
             self.control.set_preset(self.ssrc, preset)
             self.preset = preset
+        if preset in PRESETS_NEEDING_CENTRE:
+            # Centre AFTER the frequency and preset are set: `set_preset`
+            # restarts the demodulator and wfm.c re-runs set_freq at demod
+            # start, which re-parks the channel and drags the LO off anything
+            # centred earlier.
+            self.window.centre_on(self.control, freq_hz,
+                                  self.anchor_destination, sample_rate,
+                                  ssrc_hint=self.ssrc)
+
         self.control.set_output_encoding(self.ssrc, Encoding.OPUS)
         try:
             self.control.set_squelch(self.ssrc, enable=True,

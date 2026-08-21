@@ -56,6 +56,7 @@ def _controller(monkeypatch, discovered):
     c.radiod_host = "fake-radiod.local"
     c.destination = "239.1.2.3"
     c.vfo_destination = "239.1.2.4"
+    c.anchor_destination = "239.1.2.5"
     c.active_channels = {}
     c.monitored_freqs = set()
     c.activity_available = True

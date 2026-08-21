@@ -125,12 +125,16 @@ class RadioController:
         # but the VFO -- no sensors, no probe channel mid-purge.
         self.vfo_destination: str = generate_multicast_ip("radiod-monitor-vfo")
 
+        # The anchor's own group. It carries no audio and must never be
+        # mistaken for the VFO by a scan of the VFO's group.
+        self.anchor_destination: str = generate_multicast_ip("radiod-monitor-anchor")
+
         # The one channel the user listens through. Separate from the sensor
         # channels in active_channels, which exist only to report SNR for the
         # activity map and are never listened to.
         self.vfo = Vfo(control=None, window=self.window,
                        destination=self.vfo_destination,
-                       )
+                       anchor_destination=self.anchor_destination)
 
         self._apply_lock = threading.Lock()
 
@@ -141,6 +145,15 @@ class RadioController:
         except Exception as e:
             logger.error(f"Failed to connect to radiod: {e}")
             raise
+
+        # Learn the window edges once. centre_on needs them, and only the
+        # presets in PRESETS_NEEDING_CENTRE ever ask for centring -- but the
+        # edges have to be known before the first such tune. Costs one
+        # throwaway channel on the anchor group at startup.
+        await asyncio.to_thread(
+            self.window.probe, self.control, self.anchor_destination,
+            self.sample_rate
+        )
 
         self.vfo.control = self.control
         self.vfo.ssrc = None      # an SSRC belongs to one radiod, not to us
@@ -277,7 +290,8 @@ class RadioController:
         if not self.control:
             return
         dest_ips = tuple(d.split(":")[0] for d in
-                         (self.destination, self.vfo_destination))
+                         (self.destination, self.vfo_destination,
+                          self.anchor_destination))
         try:
             found = discover_channels(self.radiod_host, listen)
         except Exception as e:
@@ -359,7 +373,8 @@ class RadioController:
 
         dest_ips = tuple(
             d.split(":")[0]
-            for d in (self.destination, self.vfo_destination)
+            for d in (self.destination, self.vfo_destination,
+                      self.anchor_destination)
         )
         ssrcs = set(self.active_channels)
         try:

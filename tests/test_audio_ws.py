@@ -72,7 +72,7 @@ class FakeVfo(Vfo):
     async def _start_stream(self):
         self._stream = "fake-stream"
 
-    async def _settle(self):
+    async def _settle(self, budget=None):
         self._broadcast([MONO_FRAME])
 
 
