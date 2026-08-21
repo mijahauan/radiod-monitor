@@ -79,18 +79,14 @@ class FakeControl:
 
 
 class FakeWindow:
-    def __init__(self, centres=True):
+    """Only reports where the window is. It never places it -- radiod does."""
+
+    def __init__(self):
         self.low_edge_hz, self.high_edge_hz = -330_240.0, 330_240.0
         self.usable_bw_hz = 660_480.0
-        self.anchor_ssrc = None
-        self.centres = centres
 
-    def centre_on(self, control, freq_hz, destination, sample_rate, ssrc_hint=None):
-        control.calls.append(("centre_on", freq_hz, destination))
-        return self.centres
-
-    def release(self, control):
-        control.calls.append(("release",))
+    def read(self, control, ssrc):
+        return None
 
 
 class FakeVfo(Vfo):
@@ -117,8 +113,7 @@ class SilentVfo(FakeVfo):
 
 def make():
     c = FakeControl()
-    v = FakeVfo(control=c, window=FakeWindow(), destination="239.1.2.3",
-                anchor_destination="239.9.9.9", settle_sec=0.01, flush_sec=0.0)
+    v = FakeVfo(control=c, window=FakeWindow(), destination="239.1.2.3", settle_sec=0.01, flush_sec=0.0)
     return c, v
 
 
@@ -153,8 +148,7 @@ def test_the_ssrc_is_the_one_the_library_allocated(monkeypatch):
         return ssrc
 
     c.create_channel = spy
-    v = FakeVfo(control=c, window=FakeWindow(), destination="239.1.2.3",
-                anchor_destination="239.9.9.9", settle_sec=0.01, flush_sec=0.0)
+    v = FakeVfo(control=c, window=FakeWindow(), destination="239.1.2.3", settle_sec=0.01, flush_sec=0.0)
     asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
     created = [x for x in c.calls if x[0] == "create_channel"]
     assert len(created) == 1
@@ -162,20 +156,6 @@ def test_the_ssrc_is_the_one_the_library_allocated(monkeypatch):
         "the VFO holds the library's handle verbatim"
     )
     assert v.ssrc in c.known
-
-
-def test_anchor_and_vfo_use_different_destinations(monkeypatch):
-    """The anchor carries no audio; adopting it as the VFO breaks centring."""
-    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
-    c, v = make()
-    asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
-    centre_calls = [x for x in c.calls if x[0] == "centre_on"]
-    assert len(centre_calls) == 1
-    assert centre_calls[0][2] == v.anchor_destination
-    created = [x for x in c.calls if x[0] == "create_channel"]
-    assert len(created) == 1
-    assert created[0][3] == v.destination
-    assert v.anchor_destination != v.destination
 
 
 def test_second_tune_does_not_create_a_channel(monkeypatch):
@@ -302,13 +282,14 @@ def test_a_channel_radiod_has_forgotten_is_recreated(monkeypatch):
 def test_tune_reports_nosignal_after_exhausting_retries(monkeypatch):
     monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
     c = FakeControl()
-    v = SilentVfo(control=c, window=FakeWindow(), destination="239.1.2.3",
-                  anchor_destination="239.9.9.9", settle_sec=0.01, flush_sec=0.0)
+    v = SilentVfo(control=c, window=FakeWindow(), destination="239.1.2.3", settle_sec=0.01, flush_sec=0.0)
     result = asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
     assert result == {"type": "nosignal", "freq_hz": 102_300_000.0}
-    tune_attempts = [x for x in c.calls if x[0] == "set_frequency"]
-    assert len(tune_attempts) == vfo_mod.MAX_TUNE_ATTEMPTS, (
-        "every attempt must retune in place, never tear down the channel"
+    preset_attempts = [x for x in c.calls if x[0] == "set_preset"]
+    assert len(preset_attempts) == vfo_mod.MAX_TUNE_ATTEMPTS - 1, (
+        "the retry restarts the demodulator in place, never tearing the "
+        "channel down. A freshly created channel is already on frequency, so "
+        "only the retry re-asserts anything."
     )
     assert not any(x[0] == "remove_channel" for x in c.calls)
 
@@ -394,8 +375,7 @@ def test_tune_broadcasts_exactly_one_tuned_message_per_listener(monkeypatch):
 def test_tune_broadcasts_nosignal_to_every_listener(monkeypatch):
     monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
     c = FakeControl()
-    v = SilentVfo(control=c, window=FakeWindow(), destination="239.1.2.3",
-                  anchor_destination="239.9.9.9", settle_sec=0.01, flush_sec=0.0)
+    v = SilentVfo(control=c, window=FakeWindow(), destination="239.1.2.3", settle_sec=0.01, flush_sec=0.0)
     q = asyncio.Queue()
     v.listeners.append(q)
     result = asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
@@ -455,8 +435,7 @@ def test_the_retry_reissues_the_preset_after_the_frequency(monkeypatch):
         async def _settle(self):
             return          # no frames ever, so both attempts run
 
-    v = DeafVfo(control=c, window=FakeWindow(), destination="239.1.2.3",
-                anchor_destination="239.9.9.9", settle_sec=0.01, flush_sec=0.0)
+    v = DeafVfo(control=c, window=FakeWindow(), destination="239.1.2.3", settle_sec=0.01, flush_sec=0.0)
     result = asyncio.run(v.tune(162_400_000.0, "nfm", 48000))
     assert result["type"] == "nosignal"
     names = [x[0] for x in c.calls]
@@ -470,8 +449,7 @@ def test_a_radiod_error_during_a_tune_becomes_nosignal(monkeypatch):
     shows "audio connection lost" with no reason."""
     monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
     c = FakeControl(raise_on="create_channel")
-    v = FakeVfo(control=c, window=FakeWindow(), destination="239.1.2.3",
-                anchor_destination="239.9.9.9", settle_sec=0.01, flush_sec=0.0)
+    v = FakeVfo(control=c, window=FakeWindow(), destination="239.1.2.3", settle_sec=0.01, flush_sec=0.0)
     q = asyncio.Queue()
     v.listeners.append(q)
     result = asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
@@ -479,7 +457,8 @@ def test_a_radiod_error_during_a_tune_becomes_nosignal(monkeypatch):
     assert result["freq_hz"] == 102_300_000.0
     assert "Not connected to radiod" in result["reason"]
     assert q.get_nowait() == result
-    assert len([x for x in c.calls if x[0] == "centre_on"]) == 1, ( "the window is centred before the channel is created, so that call happens before the failure"
+    assert len([x for x in c.calls if x[0] == "create_channel:raised"]) == 1, (
+        "reported and stopped -- not retried in a loop"
     )
     assert len([x for x in c.calls if x[0] == "create_channel:raised"]) == 1, (
         "reported and stopped -- not retried in a loop"
@@ -489,39 +468,12 @@ def test_a_radiod_error_during_a_tune_becomes_nosignal(monkeypatch):
 def test_a_tune_with_no_control_connection_is_reported_not_crashed():
     """close() clears vfo.control. Without the guard this AttributeError'd and
     the user was told "Malformed tune request." -- a lie."""
-    v = FakeVfo(control=None, window=FakeWindow(), destination="239.1.2.3",
-                anchor_destination="239.9.9.9", settle_sec=0.01, flush_sec=0.0)
+    v = FakeVfo(control=None, window=FakeWindow(), destination="239.1.2.3", settle_sec=0.01, flush_sec=0.0)
     result = asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
     assert result["type"] == "nosignal"
     assert "radiod" in result["reason"]
 
 
-def test_a_failure_to_centre_is_reported_as_the_reason(monkeypatch):
-    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
-    c = FakeControl()
-    v = SilentVfo(control=c, window=FakeWindow(centres=False),
-                  destination="239.1.2.3", anchor_destination="239.9.9.9",
-                  settle_sec=0.01, flush_sec=0.0)
-    result = asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
-    assert result == {"type": "nosignal", "freq_hz": 102_300_000.0,
-                      "reason": "could not centre the receiver's window"}
-
-
-def test_a_centred_tune_that_hears_nothing_has_no_reason(monkeypatch):
-    """"No signal" and "we could not point the radio at it" are different
-    things and must stay distinguishable."""
-    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
-    c = FakeControl()
-    v = SilentVfo(control=c, window=FakeWindow(centres=True),
-                  destination="239.1.2.3", anchor_destination="239.9.9.9",
-                  settle_sec=0.01, flush_sec=0.0)
-    result = asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
-    assert "reason" not in result
-
-
-# ---------------------------------------------------------------------------
-# Control messages vs. the frame queue
-# ---------------------------------------------------------------------------
 def test_a_control_message_displaces_audio_rather_than_being_dropped():
     """frontend/app.js ignores every frame until a "tuned" configures its
     decoder, so a dropped "tuned" is permanent silence; a dropped Opus frame
@@ -608,8 +560,7 @@ def test_in_flight_frames_from_the_previous_station_do_not_count(monkeypatch):
             super()._tune_once(*a, **kw)
             self._frames_seen = 7      # the previous station, still in flight
 
-    v = StaleVfo(control=c, window=FakeWindow(), destination="239.1.2.3",
-                 anchor_destination="239.9.9.9", settle_sec=0.01, flush_sec=0.0)
+    v = StaleVfo(control=c, window=FakeWindow(), destination="239.1.2.3", settle_sec=0.01, flush_sec=0.0)
     result = asyncio.run(v.tune(91_300_000.0, "wfm", 48000))
     assert result["type"] == "nosignal", (
         "frames from before the flush are the old station and prove nothing"
@@ -643,36 +594,6 @@ def test_a_narrowband_station_change_is_a_retune(monkeypatch):
     assert v.ssrc == first
     assert not any(x[0] in ("create_channel", "remove_channel") for x in c.calls)
     assert any(x[0] == "set_frequency" for x in c.calls)
-
-
-def test_a_new_channel_is_born_inside_an_already_centred_window(monkeypatch):
-    """radiod places a new channel against the window as it stands, and a wfm
-    demodulator that starts edge-parked never recovers -- centring afterwards
-    does not repair it, because nothing re-runs placement. Measured:
-    create-then-centre left the LO at 91.5192 for a 91.300 station, 219.2 kHz
-    off and silent; centre-then-create gave snr 19.29 and 251 frames in 5 s."""
-    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
-    c, v = make()
-    asyncio.run(v.tune(91_300_000.0, "wfm", 48000))
-    names = [x[0] for x in c.calls]
-    assert names.index("centre_on") < names.index("create_channel")
-
-
-def test_a_retune_centres_afterwards(monkeypatch):
-    """The opposite case: set_preset restarts the demod and wfm.c re-runs
-    set_freq at demod start, dragging the LO off anything centred first.
-    Measured over three runs each, 162.400 nfm -> 102.300 wfm: centre-first
-    IF -219.2 kHz every time, centre-last +0.0 kHz."""
-    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
-    c, v = make()
-    asyncio.run(v.tune(162_400_000.0, "nfm", 48000))
-    c.calls.clear()
-    asyncio.run(v.tune(162_450_000.0, "nfm", 48000))     # a retune
-    names = [x[0] for x in c.calls]
-    assert "create_channel" not in names
-    assert names.index("set_frequency") < names.index("centre_on")
-
-
 
 
 def test_a_mode_change_parks_the_old_channel_and_removes_nothing(monkeypatch):
@@ -719,8 +640,7 @@ def test_a_wfm_retry_asks_the_library_for_a_different_channel(monkeypatch):
         async def _settle(self):
             return                      # no frames, so both attempts run
 
-    v = DeafVfo(control=c, window=FakeWindow(), destination="239.1.2.3",
-                anchor_destination="239.9.9.9", settle_sec=0.01, flush_sec=0.0)
+    v = DeafVfo(control=c, window=FakeWindow(), destination="239.1.2.3", settle_sec=0.01, flush_sec=0.0)
     real_create = c.create_channel
 
     def spy(**kw):

@@ -91,8 +91,7 @@ class FakeController:
         self.converge_task = None
         self.squelch = []
         self.vfo = FakeVfo(control=self.control, window=self.window,
-                           destination="239.1.2.3",
-                           anchor_destination="239.9.9.9", settle_sec=0.0)
+                           destination="239.1.2.3", settle_sec=0.0)
 
     async def connect(self):
         pass
@@ -251,8 +250,7 @@ def test_a_mode_switch_tells_a_listener_their_station_is_gone(fake):
     msg = q.get_nowait()
     assert msg == {"type": "nosignal", "freq_hz": 102_300_000.0,
                    "reason": "station is not in the current search"}
-    assert fake.vfo.freq_hz is None, "the VFO was released"
-    assert fake.window.released >= 1, "and so was the anchor holding the LO"
+    assert fake.vfo.freq_hz is None, "the VFO stopped"
 
 
 def test_a_listener_on_a_station_still_in_the_search_is_left_alone(fake):

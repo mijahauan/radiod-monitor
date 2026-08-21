@@ -393,28 +393,6 @@ async def _handle_search(websocket: WebSocket, data: Dict[str, Any]):
                 put_control(q, stale)
             await controller.vfo.stop()
 
-        # A mode switch may leave the anchor centred on a frequency that no
-        # longer belongs to this search. The anchor channel is exempt from
-        # the stale-channel sweep in _apply_stations_locked (that is what
-        # keeps it from being deleted out from under a listener), so without
-        # this it would sit there holding the front end on a station nobody
-        # can reach any more, surviving every later search until shutdown.
-        # The next Listen recentres it via FrontEndWindow.centre_on.
-        #
-        # Gated on the VFO not being tuned to anything, not on whether a
-        # session socket is open: the session socket is opened once per page
-        # load and stays open the whole time, so `vfo.listeners` alone is
-        # non-empty from load to close and would never gate this. `freq_hz`
-        # is None before the first tune and after stop() clears it, and is
-        # set for exactly as long as someone is hearing a station -- so this
-        # releases an idle session's anchor while still not un-centring the
-        # window out from under whoever is currently listening on an
-        # anchored station, which is the "search cuts off audio" regression
-        # this project already fixed once.
-        if controller.vfo.freq_hz is None:
-            # remove_channel on the control socket: blocking, like the rest.
-            await asyncio.to_thread(controller.window.release,
-                                    controller.control)
 
     controller.converge_task = asyncio.create_task(_converge())
 

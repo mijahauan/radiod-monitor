@@ -13,9 +13,8 @@ it holds whatever create_channel() allocates it).
 
 Three multicast groups, not one, because `destination` is an input to that
 hash: sensors on `radiod-monitor`, the listened-to VFO on
-`radiod-monitor-vfo`, and the window-placing anchor on
-`radiod-monitor-anchor`. Distinct groups are what keep the VFO's SSRC from
-aliasing onto a sensor's, and what make both the VFO and the anchor exempt
+and `radiod-monitor-vfo`. Distinct groups are what keep the VFO's SSRC
+from aliasing onto a sensor's, and what make the VFO exempt
 from the stale-channel sweep structurally rather than by a special case.
 
 Per-user settings (squelch) are applied after channel creation so they
@@ -36,7 +35,7 @@ from ka9q.types import Encoding
 
 from .sources.base import Station
 from .vfo import Vfo
-from .window import FrontEndWindow, DEFAULT_USABLE_BW_HZ
+from .window import FrontEndWindow
 
 logger = logging.getLogger(__name__)
 
@@ -103,17 +102,13 @@ class RadioController:
         # Measured usable IF window of the connected receiver -- probed from
         # radiod's FE_LOW_EDGE/FE_HIGH_EDGE on connect and re-probed on every
         # host change, since it's a property of the radio, not of this app.
-        # FrontEndWindow also owns placing the front end (the anchor
-        # mechanism -- see backend/window.py).
         self.window = FrontEndWindow()
 
-        # Where the anchor lives. It carries no audio, so it does not belong
         # on the audio group: sharing one destination is what let the VFO's
         # adopt-an-existing-channel scan pick up the anchor after a restart
         # and destroy the centring that wfm depends on. A separate group also
         # makes the anchor's exemption from the stale sweep structural rather
         # than a special case.
-        self.anchor_destination: str = generate_multicast_ip("radiod-monitor-anchor")
 
         # Where the VFO lives. A THIRD group, and it has to be: `destination`
         # is one of the inputs to allocate_ssrc, and the sensor diff below
@@ -135,7 +130,7 @@ class RadioController:
         # activity map and are never listened to.
         self.vfo = Vfo(control=None, window=self.window,
                        destination=self.vfo_destination,
-                       anchor_destination=self.anchor_destination)
+                       )
 
         self._apply_lock = threading.Lock()
 
@@ -146,16 +141,6 @@ class RadioController:
         except Exception as e:
             logger.error(f"Failed to connect to radiod: {e}")
             raise
-        # The probe's throwaway channel carries no audio and is removed
-        # immediately, but remove_channel is not instantaneous -- it lingers in
-        # discovery for a moment. On the VFO's group that lingering channel is
-        # exactly what the adopt scan would grab; on the sensor group it is a
-        # phantom station. It belongs with the anchor: infrastructure, not
-        # content.
-        await asyncio.to_thread(
-            self.window.probe, self.control, self.anchor_destination,
-            self.sample_rate
-        )
 
         self.vfo.control = self.control
         self.vfo.ssrc = None      # an SSRC belongs to one radiod, not to us
@@ -180,22 +165,6 @@ class RadioController:
     # is not cosmetic.
     WINDOW_FILL = 0.8
 
-    def fits_window(self, freqs) -> bool:
-        """True if every one of `freqs` can be monitored simultaneously.
-
-        A monitored station needs a radiod channel inside the front end's
-        window, and there is one window shared by every channel. So this is
-        what decides whether the activity map can mean anything: with the
-        whole set inside the window each channel reports real SNR, and
-        without it the app monitors nothing and serves the station list as a
-        directory instead.
-        """
-        values = [float(f) for f in freqs]
-        if len(values) < 2:
-            return True
-        span = max(values) - min(values)
-        window = self.window.usable_bw_hz or DEFAULT_USABLE_BW_HZ
-        return span <= window * self.WINDOW_FILL
 
     def _squelch_args(self) -> dict:
         """
@@ -308,8 +277,7 @@ class RadioController:
         if not self.control:
             return
         dest_ips = tuple(d.split(":")[0] for d in
-                         (self.destination, self.vfo_destination,
-                          self.anchor_destination))
+                         (self.destination, self.vfo_destination))
         try:
             found = discover_channels(self.radiod_host, listen)
         except Exception as e:
@@ -362,7 +330,7 @@ class RadioController:
 
         self.monitored_freqs = set()
         try:
-            await asyncio.to_thread(self.window.release, self.control)
+            pass
         except Exception as e:
             logger.debug(f"release_idle: window release: {e}")
         logger.info(
@@ -391,8 +359,7 @@ class RadioController:
 
         dest_ips = tuple(
             d.split(":")[0]
-            for d in (self.destination, self.vfo_destination,
-                      self.anchor_destination)
+            for d in (self.destination, self.vfo_destination)
         )
         ssrcs = set(self.active_channels)
         try:

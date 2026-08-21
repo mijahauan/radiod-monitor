@@ -1,41 +1,39 @@
 """The VFO: the one channel the user actually listens to.
 
-It is created once and RETUNED, never recreated. That is the load-bearing
-rule. Destroying a radiod channel starts a ~20 s asynchronous purge (radio.c
-reaps a channel only once its frequency is zero, after Channel_idle_timeout);
-re-creating the same SSRC inside that window hands back a channel radiod is
-still tearing down, which never produces RTP. Every "switching is broken"
-symptom in this project traces to that cycle.
+The app asks for a frequency, a preset and a sample rate. radiod does the
+rest -- including placing the receiver's front-end window, which this module
+used to fight over with a decoy "anchor" channel. Measured on an empty
+receiver, one channel created and nothing else touched:
 
-The SSRC is never computed here. `create_channel()` allocates one and returns
-it; this module stores that integer and hands it back to the library. The app's
-vocabulary is frequency, preset, and sample rate -- transport identity belongs
-to ka9q-python.
+    Airspy R2 (4.1 MHz window), wfm 91.300
+        LO 93.9500, IF -2650.0 kHz -- exactly the window centre
+        snr 29.1, 601 frames in 6 s, voice/hiss 377.6, envelope-var 0.52
 
-The stream is a `RadiodStream` bound to that SSRC rather than a
+    Airspy HF+ (660 kHz window), nfm 162.400
+        LO 162.0770, IF +323.0 kHz
+        snr 12.0, 301 frames in 6 s, voice/hiss 7.80, envelope-var 0.42
+
+radiod centred the wideband channel unaided, which is exactly what the anchor
+was built to achieve, and the narrowband channel worked happily off-centre
+without any placement at all. All of that machinery is gone.
+
+Two rules remain, and both are about radiod rather than the radio:
+
+  * A channel is RETUNED where that works and replaced where it does not.
+    Destroying a channel starts a ~20 s purge (radio.c reaps a channel only
+    once its frequency is zero, after Channel_idle_timeout), and re-creating
+    an SSRC inside that window hands back the channel being torn down, which
+    never produces RTP. ka9q-python avoids that collision; this module only
+    has to avoid needless churn.
+
+  * The SSRC is never computed here. `create_channel()` allocates one and
+    this module hands it straight back to the library. The app's vocabulary
+    is frequency, preset and sample rate; transport identity is not its
+    business.
+
+The stream is a `RadiodStream` bound to the channel rather than a
 `ManagedStream` bound to a frequency, because only the former follows a
-retune; see the task notes.
-
-Tuning order matters as much as identity: the window is centred LAST, after
-the frequency and preset are set. `set_preset` restarts the demodulator and
-`wfm.c` re-runs `set_freq` at demod start, which re-parks the channel at the
-window edge and drags the LO with it -- so centring any earlier does not
-survive. Measured, three runs each, retuning 162.400 nfm -> 102.300 wfm:
-centre-first IF -219.2 kHz every time, centre-last IF +0.0 kHz every time.
-See `_tune_once`.
-
-The VFO's channel, the window's anchor channel, and the activity-map sensor
-channels live on THREE DIFFERENT multicast destinations. That is not tidiness:
-`destination` is one of the inputs to the SSRC hash the library allocates
-from, so a VFO sharing the sensors' group and tuned to a monitored station
-gets the sensor's exact SSRC -- one channel doing two jobs, with the search's
-squelch and retunes landing on the channel the user is listening through.
-Distinct groups make the collision impossible, make the VFO and the anchor
-exempt from the stale-channel sweep structurally, and leave the adopt scan
-below looking at a group that contains nothing but the VFO. Sharing one
-destination previously let that scan pick up the anchor and mistake it for the
-VFO, which then "centred" the window on wherever the anchor happened to be
-instead of the station the user asked for.
+retune.
 """
 import asyncio
 import logging
@@ -153,12 +151,11 @@ class Vfo:
     """One retunable channel plus its listener fan-out."""
 
     def __init__(self, control, window, destination: str,
-                 anchor_destination: str, settle_sec: float = TUNE_SETTLE_SEC,
+                 settle_sec: float = TUNE_SETTLE_SEC,
                  flush_sec: float = TUNE_FLUSH_SEC):
         self.control = control
         self.window = window
         self.destination = destination
-        self.anchor_destination = anchor_destination
         self.settle_sec = settle_sec
         self.flush_sec = flush_sec
         self.ssrc: Optional[int] = None
@@ -192,7 +189,6 @@ class Vfo:
         # Whether the last _tune_once managed to place the window on the
         # target. False is a distinguishable cause of "no signal" and is
         # reported as such rather than papered over.
-        self._centred = True
         self._lock = asyncio.Lock()
 
     # -- listeners ---------------------------------------------------------
@@ -213,19 +209,13 @@ class Vfo:
     async def stop(self) -> None:
         """Last listener gone: stop the stream. Remove nothing.
 
-        Neither the channel nor the anchor is dropped. The channel stays for
+        The channel is not dropped. It stays for
         the reason it always did -- removing it starts a purge the next tune
-        could land inside. The ANCHOR stays for a sharper reason, learned
-        late: a channel radiod has not finished reaping breaks the
-        demodulator of any channel created after it. Measured at 91.300 MHz
-        with an identical window (LO 91.3000) both times, 3 channels lingering
-        at freq 0 gave snr None and 0 frames, while 0 lingering gave snr 19.09
+        could land inside, and a channel radiod has not finished reaping
+        breaks the demodulator of any channel created after it. Measured at
+        91.300 MHz, identical window both times: 3 channels lingering at
+        freq 0 gave snr None and 0 frames, while 0 lingering gave snr 19.09
         and 201 frames.
-
-        Releasing the anchor here left exactly such a corpse every time a
-        listener closed the page, and the next tune inherited it. The anchor
-        is retuned by `centre_on` on the next tune anyway, so dropping it
-        bought nothing. `close()` still removes it, where nothing follows.
 
         Takes `self._lock` itself rather than trusting callers to hold it --
         a caller outside `tune()` (a mode switch, `close()`) has no lock of
@@ -252,7 +242,6 @@ class Vfo:
                 # the retune -- WebCodecs throws if the header lies about it.
                 self.channels = None
             self.freq_hz = freq_hz
-            self._centred = True
             for attempt in range(1, MAX_TUNE_ATTEMPTS + 1):
                 try:
                     await asyncio.to_thread(self._tune_once, freq_hz, preset,
@@ -305,12 +294,6 @@ class Vfo:
                 )
             self.sample_rate = sample_rate
             result = {"type": "nosignal", "freq_hz": freq_hz}
-            if not self._centred:
-                # centre_on returned False: edges unprobed, the anchor is
-                # unreadable, or it could not be placed. Any of the three
-                # leaves a wideband demod outside the window, which is the
-                # single most likely reason no RTP followed.
-                result["reason"] = "could not centre the receiver's window"
             self._broadcast_message(result)
             return result
 
@@ -347,10 +330,8 @@ class Vfo:
 
         A narrowband preset retunes freely; `wfm` only works on the frequency
         it was created for (see RECREATE_ON_RETUNE). The caller needs this
-        BEFORE the tune begins, because it decides when the window is centred:
-        a channel about to be CREATED must be born inside a window that
-        already covers it, while a channel being RETUNED must be centred
-        afterwards.
+        BEFORE the tune begins, so a station change can avoid destroying and
+        re-creating a channel when a plain retune will do.
         """
         if self.ssrc is None or self.preset != preset:
             return False
@@ -485,8 +466,8 @@ class Vfo:
             0 channels lingering at freq 0    snr 19.09  201 frames
 
         Every cross-band switch used to make two of those -- the old VFO
-        channel and the anchor -- which is exactly why switching bands
-        mid-session failed while a cold start worked.
+        channel and the anchor it then had -- which is exactly why switching
+        bands mid-session failed while a cold start worked.
 
         Parking satisfies both: nothing is in the wrong band, and nothing is
         being reaped. The cost is an idle demodulator per preset the session
@@ -517,73 +498,26 @@ class Vfo:
 
     def _tune_once(self, freq_hz: float, preset: str, sample_rate: int,
                    restart_demod: bool) -> None:
-        """Blocking half of a tune. Five steps, and the order is the point.
+        """Blocking half of a tune.
 
-        **Centre LAST.** Measured on the Airspy HF+ at 660.5 kHz, retuning a
-        channel from 162.400 MHz (nfm) to 102.300 MHz (wfm), three runs each:
+        Make sure a channel exists for what was asked, point it at the
+        station, assert the Opus grant and hold the squelch open. radiod
+        places the front end itself; nothing here touches it.
 
-            centre -> set_freq -> set_preset :  IF -219.2, -219.2, -219.2 kHz
-            set_freq -> set_preset -> centre :  IF   +0.0,   +0.0,   +0.0 kHz
+        `set_preset` comes after `set_frequency` because a preset command
+        restarts the demodulator, and `wfm.c` re-runs `set_freq` at demod
+        start -- restart it first and radiod re-places the channel from the
+        previous station's frequency.
 
-        219.2 kHz is `high_edge - filter.max_IF - fudge` for wfm -- radiod's
-        edge-parking position. Centring first does not survive, because
-        `set_preset` restarts the demodulator and `wfm.c` re-runs `set_freq`
-        at demod start, which re-parks the channel at the edge and drags the
-        LO with it, undoing the centring. Nothing re-runs `set_freq` after
-        step 4, so centring there holds.
-
-        This is also what the anchor was always for: it exists to rescue a
-        channel radiod has *already* parked at the edge, by moving the LO onto
-        it so every channel recalculates its IF against the new LO. An earlier
-        version of this plan asserted the opposite as a global constraint --
-        "centre before tuning" -- on the theory that a demod starting at the
-        edge never recovers. The measurement above refutes it for the retune
-        path, and CLAUDE.md's original account (IF +219.2 / snr -inf / ~17
-        frames per 10 s before the anchor, IF +0.0 / snr 6.5 / 500 frames
-        after) was always a description of centring last.
-
-        1. Make sure the channel exists.
-        2. Set the frequency, so nothing downstream sees a stale one.
-        3. Set the preset, if it changed or this is a retry. It restarts the
-           demodulator, so it must come after step 2, or wfm.c re-runs
-           set_freq from the previous station's frequency.
-        4. Re-assert the Opus grant and the held-open squelch.
-        5. Centre the window on the target, last, so it survives.
-
-        Raises if there is no control connection -- the caller turns that into
-        a nosignal with a reason, which is a great deal more use than an
-        AttributeError reported to the user as "Malformed tune request".
+        Raises if there is no control connection; the caller turns that into
+        a nosignal with a reason rather than an AttributeError reported to
+        the user as "Malformed tune request".
         """
         if self.control is None:
             raise RuntimeError("no connection to radiod")
 
         # 1. Make sure the channel exists.
-        # WHEN the window is centred depends on whether a channel is about to
-        # be born or merely retuned, and the two are opposites.
-        #
-        # A channel being CREATED must be born inside a window that already
-        # covers it. radiod places a new channel against the window as it
-        # stands, and a wfm demodulator that starts edge-parked never
-        # recovers -- centring afterwards does not repair it, because nothing
-        # re-runs placement. Measured: create-then-centre left the LO at
-        # 91.5192 for a 91.300 station (219.2 kHz off, the edge-park
-        # position) and produced no audio, while centre-then-create gave
-        # snr 19.29 and 251 frames in 5 s.
-        #
-        # A channel being RETUNED is the opposite: `set_preset` restarts the
-        # demodulator and `wfm.c` re-runs `set_freq` at demod start, which
-        # re-parks it and drags the LO off anything centred beforehand.
-        # Measured over three runs each, retuning 162.400 nfm -> 102.300 wfm:
-        # centre-first gave IF -219.2 kHz every time, centre-last +0.0 kHz.
         reusing = self.can_reuse(freq_hz, preset)
-        if not reusing:
-            # Park before centring: a channel still in the band we came from
-            # prevents the window being placed for the new one.
-            self._park_our_channels(freq_hz)
-            self._centred = self.window.centre_on(
-                self.control, freq_hz, self.anchor_destination,
-                sample_rate, ssrc_hint=None,
-            )
 
         fresh = self._ensure_channel_exists(
             freq_hz, preset, sample_rate,
@@ -599,15 +533,26 @@ class Vfo:
                 logger.debug(f"vfo stream stop: {e}")
             self._stream = None
 
-        # 2. Frequency first...
-        self.control.set_frequency(self.ssrc, freq_hz)
+        # A channel we just created is already on frequency -- create_channel
+        # was given it. Re-sending it is not a no-op: radiod places a NEW
+        # channel freshly, but a frequency CHANGE only moves the front end far
+        # enough to bring the channel back in range. Measured on the R2, same
+        # station and preset both times:
+        #
+        #   create only            LO 93.9500  IF -2650.0 kHz  601 frames
+        #   create + set_frequency LO 162.077  (front end never moved)   0
+        #
+        # So only retunes send it.
+        if not fresh:
+            self.control.set_frequency(self.ssrc, freq_hz)
 
-        # 3. ...then the preset, which restarts the demodulator in place --
-        # which is also the retry, and is why the retry never destroys the VFO.
+        # The preset restarts the demodulator in place -- which is also the
+        # retry, and is why the retry never destroys the channel. It comes
+        # after the frequency: restart it first and wfm.c re-runs set_freq
+        # from the previous station's frequency.
         if preset != self.preset or restart_demod:
             self.control.set_preset(self.ssrc, preset)
             self.preset = preset
-        # 4.
         self.control.set_output_encoding(self.ssrc, Encoding.OPUS)
         try:
             self.control.set_squelch(self.ssrc, enable=True,
@@ -616,14 +561,6 @@ class Vfo:
         except Exception as e:
             logger.debug(f"vfo squelch: {e}")
 
-        # 5. Centre AFTER a retune only -- a newly created channel was already
-        # centred before it was born, and re-centring here would move the LO
-        # under a demodulator that has just started.
-        if reusing:
-            self._centred = self.window.centre_on(
-                self.control, freq_hz, self.anchor_destination,
-                sample_rate, ssrc_hint=self.ssrc,
-            )
 
     async def _start_stream(self) -> None:
         """Attach a RadiodStream to the VFO's SSRC.
