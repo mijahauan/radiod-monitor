@@ -355,15 +355,24 @@ class Vfo:
     def can_reuse(self, freq_hz: float, preset: str) -> bool:
         """Whether the channel we hold can serve this station as it stands.
 
-        A narrowband preset retunes freely; `wfm` only works on the frequency
-        it was created for (see RECREATE_ON_RETUNE). The caller needs this
-        BEFORE the tune begins, so a station change can avoid destroying and
-        re-creating a channel when a plain retune will do.
+        A narrowband preset retunes freely, so its channel is reusable for any
+        station. A preset in RECREATE_ON_RETUNE is **never** reusable, even for
+        the station it was created for: by the time we are asked again, this
+        session has retuned it at least once (parking a band change, or the
+        preset re-assert the retry sends), and a retuned wfm channel is dead.
+
+        Saying "reusable" for the same frequency was the bug behind FM after
+        NWS. The first attempt replaced the channel correctly; the retry then
+        matched on same-preset-same-frequency, kept the corpse, and re-asserted
+        its preset -- six frames, every time, while a freshly created channel
+        on that station gives 601 at snr 13.5.
+
+        The caller needs this BEFORE the tune begins, so a station change can
+        avoid destroying and re-creating a channel when a retune will do.
         """
-        if self.ssrc is None or self.preset != preset:
+        if preset in RECREATE_ON_RETUNE:
             return False
-        return (preset not in RECREATE_ON_RETUNE
-                or self._channel_freq_hz == freq_hz)
+        return self.ssrc is not None and self.preset == preset
 
     def _ensure_channel_exists(self, freq_hz: float, preset: str,
                                sample_rate: int,
@@ -444,6 +453,12 @@ class Vfo:
 
         # 3. Create the one channel. The library allocates its SSRC; this app
         #    never chooses or derives one.
+        # force_new on a retry, and always for a preset that cannot be
+        # retuned: the deterministic SSRC names a channel this session has
+        # already retuned, which is dead. Safe from accumulating because the
+        # block above removed ours first.
+        force_new = force_new or preset in RECREATE_ON_RETUNE
+
         # force_new on a retry: the channel we got did not produce audio, and
         # for wfm that is usually because the deterministic SSRC named a
         # channel left dead by an earlier session -- create_channel reuses an

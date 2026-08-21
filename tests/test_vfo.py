@@ -291,15 +291,51 @@ def test_tune_reports_nosignal_after_exhausting_retries(monkeypatch):
     monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
     c = FakeControl()
     v = SilentVfo(control=c, window=FakeWindow(), destination="239.1.2.3", settle_sec=0.01, flush_sec=0.0)
-    result = asyncio.run(v.tune(102_300_000.0, "wfm", 48000))
-    assert result == {"type": "nosignal", "freq_hz": 102_300_000.0}
+    result = asyncio.run(v.tune(162_400_000.0, "nfm", 48000))
+    assert result == {"type": "nosignal", "freq_hz": 162_400_000.0}
     preset_attempts = [x for x in c.calls if x[0] == "set_preset"]
     assert len(preset_attempts) == vfo_mod.MAX_TUNE_ATTEMPTS - 1, (
-        "the retry restarts the demodulator in place, never tearing the "
-        "channel down. A freshly created channel is already on frequency, so "
-        "only the retry re-asserts anything."
+        "for a retunable preset the retry restarts the demodulator in place; "
+        "a freshly created channel is already on frequency, so only the retry "
+        "re-asserts anything"
     )
-    assert not any(x[0] == "remove_channel" for x in c.calls)
+    assert not any(x[0] == "remove_channel" for x in c.calls), (
+        "a retunable channel is never torn down"
+    )
+
+
+
+
+def test_every_wfm_attempt_replaces_the_channel(monkeypatch):
+    """A preset that cannot be retuned is never reusable -- not even for the
+    station it was created for, because by the time we are asked again this
+    session has retuned it (parking a band change, or the retry's preset
+    re-assert) and a retuned wfm channel is dead.
+
+    Treating it as reusable for the same frequency is what left FM after NWS
+    at six frames: the first attempt replaced the channel correctly, then the
+    retry matched same-preset-same-frequency and kept the corpse. A freshly
+    created channel on that station gives 601 frames at snr 13.5.
+    """
+    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
+    c = FakeControl()
+
+    class DeafVfo(FakeVfo):
+        async def _settle(self, budget=None):
+            return                       # never any RTP, so both attempts run
+
+    v = DeafVfo(control=c, window=FakeWindow(), destination="239.1.2.3",
+                anchor_destination="239.9.9.9", settle_sec=0.01, flush_sec=0.0)
+    result = asyncio.run(v.tune(91_300_000.0, "wfm", 48000))
+    assert result["type"] == "nosignal"
+    creates = [x for x in c.calls if x[0] == "create_channel"]
+    assert len(creates) == vfo_mod.MAX_TUNE_ATTEMPTS, (
+        "each attempt gets a channel radiod does not already have"
+    )
+    assert any(x[0] == "remove_channel" for x in c.calls), (
+        "and the previous one goes first, so they cannot accumulate"
+    )
+    assert not v.can_reuse(91_300_000.0, "wfm"), "never reusable"
 
 
 def test_channels_reset_on_retune_so_a_stale_count_cannot_survive(monkeypatch):
