@@ -633,52 +633,22 @@ def test_a_mode_change_parks_the_old_channel_and_removes_nothing(monkeypatch):
     assert v.ssrc != old
 
 
-def test_a_wfm_retry_asks_the_library_for_a_different_channel(monkeypatch):
-    """create_channel reuses an existing SSRC by design, so for a preset that
-    cannot be retuned, asking again returns the same channel -- and if that
-    channel was left dead by an earlier session, every attempt gets the corpse.
-    The retry sets force_new so the library steps to one radiod does not have.
-    The app still never picks an SSRC.
-    """
-    monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
-    c = FakeControl()
-    seen = []
-
-    class DeafVfo(FakeVfo):
-        async def _settle(self, budget=None):
-            return                      # no frames, so both attempts run
-
-    v = DeafVfo(control=c, window=FakeWindow(), destination="239.1.2.3", settle_sec=0.01, flush_sec=0.0)
-    real_create = c.create_channel
-
-    def spy(**kw):
-        seen.append(kw.get("force_new", False))
-        return real_create(**kw)
-    c.create_channel = spy
-
-    asyncio.run(v.tune(91_300_000.0, "wfm", 48000))
-    assert all(seen), (
-        "a preset that cannot be retuned never inherits whatever sits under "
-        "its deterministic SSRC -- an earlier session may have left a dead "
-        "channel there, and create_channel reuses by SSRC"
-    )
-
-
-def test_returning_to_an_fm_station_reuses_its_channel(monkeypatch):
-    """A wfm channel is created once per station and never retuned, so it
-    stays alive and can be returned to at once. Without this, coming back
-    re-derives the same deterministic SSRC, gets whatever is under it, and
-    pays a failed 2.5 s attempt before the retry rescues it -- measured as
-    FM's "tuned" arriving at 4.9 s instead of promptly."""
+def test_returning_to_an_fm_station_gets_a_new_channel(monkeypatch):
+    """A wfm channel is replaced, never reused, because one that has been
+    retuned is permanently dead and parking it is a retune. Caching the
+    channel per station -- which this used to do -- handed the dead one back
+    on a return visit. Measured with replacement: LO 91.3000, IF 0.0 kHz,
+    snr 13.6, 550 frames, envelope-var 1.28."""
     monkeypatch.setattr(vfo_mod, "discover_channels", lambda *a, **k: {})
     c, v = make()
     asyncio.run(v.tune(91_300_000.0, "wfm", 48000))
-    fm_ssrc = v.ssrc
-    asyncio.run(v.tune(162_400_000.0, "nfm", 48000))    # away to NWS
+    first = v.ssrc
+    asyncio.run(v.tune(162_400_000.0, "nfm", 48000))
     c.calls.clear()
-    asyncio.run(v.tune(91_300_000.0, "wfm", 48000))     # and back
-    assert v.ssrc == fm_ssrc, "the station's own channel, still alive"
-    assert not any(x[0] == "create_channel" for x in c.calls)
+    asyncio.run(v.tune(91_300_000.0, "wfm", 48000))
+    assert any(x[0] == "remove_channel" for x in c.calls), "the old wfm goes"
+    assert any(x[0] == "create_channel" for x in c.calls), "a fresh one arrives"
+    assert v.ssrc != first
 
 
 def test_only_presets_that_need_it_are_centred(monkeypatch):

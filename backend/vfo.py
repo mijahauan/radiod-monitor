@@ -194,13 +194,6 @@ class Vfo:
         # the sweep that was meant to remove them logged nothing. Anything we
         # made, we can remove by name.
         self._created: dict = {}      # ssrc -> preset it was created with
-        # (preset, frequency) -> ssrc, for presets that cannot be retuned.
-        # Such a channel is created once per station and never touched again,
-        # so it stays alive and can be returned to instantly. Without this,
-        # coming back to an FM station re-derives the same deterministic SSRC
-        # and gets whatever is under it -- often a channel an earlier session
-        # left dead, which costs a failed 2.5 s attempt before the retry.
-        self._per_station: dict = {}
         self.freq_hz: Optional[float] = None
         self.preset: Optional[str] = None
         self.sample_rate: Optional[int] = None
@@ -407,20 +400,9 @@ class Vfo:
         # 1. Can we keep what we have?
         if force_new:
             # Do not keep the channel we were told is dead.
-            self._per_station.pop((preset, freq_hz), None)
             self.ssrc = None
             self.preset = None
 
-        # A station we have already built a working channel for. It was never
-        # retuned, so it is still alive and still on frequency.
-        held = self._per_station.get((preset, freq_hz))
-        if held is not None and held != self.ssrc:
-            if self.control.poll_channel(held, timeout=1.0) is not None:
-                self.ssrc = held
-                self.preset = preset
-                self._channel_freq_hz = freq_hz
-                return True
-            self._per_station.pop((preset, freq_hz), None)
 
         if self.can_reuse(freq_hz, preset):
             if self.control.poll_channel(self.ssrc, timeout=2.0) is not None:
@@ -436,10 +418,28 @@ class Vfo:
             self.ssrc = None
             self.preset = None
 
-        # 2. Everything we own moves onto this frequency; nothing is removed,
-        #    because a channel being reaped breaks the demodulator of one
-        #    created after it. See _park_our_channels.
+        # 2. Retunable channels move onto this frequency so nothing is left
+        #    stranded in the band we came from.
         self._park_our_channels(freq_hz)
+
+        if preset in RECREATE_ON_RETUNE:
+            # This preset's channel cannot be reused: a wfm channel that has
+            # been retuned is permanently dead, and parking it is a retune.
+            # Drop ours before making the replacement, or they accumulate --
+            # three wfm channels at 91.300 MHz, one reading snr 13.5 and the
+            # stream following a silent one. Measured with the removal in
+            # place: LO 91.3000, IF 0.0 kHz, snr 13.6, 550 frames, env-var
+            # 1.28.
+            for ssrc, made_with in list(self._created.items()):
+                if made_with != preset:
+                    continue
+                try:
+                    self.control.remove_channel(ssrc)
+                except Exception as e:
+                    logger.debug(f"replacing {preset} channel {ssrc}: {e}")
+                self._created.pop(ssrc, None)
+            force_new = True
+
         self.ssrc = None
 
         # 3. Create the one channel. The library allocates its SSRC; this app
@@ -453,18 +453,16 @@ class Vfo:
         self.ssrc = self.control.create_channel(
             frequency_hz=freq_hz, preset=preset, sample_rate=sample_rate,
             gain=0.0, destination=self.destination, encoding=Encoding.OPUS,
-            # A preset that cannot be retuned must not inherit whatever sits
-            # under its deterministic SSRC: an earlier session may have left a
-            # dead channel there, and create_channel reuses by SSRC. We have no
-            # record of this station, so insist on a channel radiod does not
-            # already have.
-            force_new=force_new or preset in RECREATE_ON_RETUNE,
+            # Only when the caller has a channel it knows is dead. Insisting
+            # on a brand-new channel for every wfm tune -- which this used to
+            # do -- accumulated one per attempt and left the app streaming the
+            # newest while an earlier one played: three wfm channels at
+            # 91.300 MHz, one reading snr 13.5, the stream on a silent one.
+            force_new=force_new,
         )
         self.preset = preset
         self._channel_freq_hz = freq_hz
         self._created[self.ssrc] = preset
-        if preset in RECREATE_ON_RETUNE:
-            self._per_station[(preset, freq_hz)] = self.ssrc
         born = self.control.poll_channel(self.ssrc, timeout=2.0)
         if born is not None and (getattr(born, "frequency", None) or 0) == 0:
             # radiod hands back a channel it is still reaping if this SSRC was
@@ -523,7 +521,7 @@ class Vfo:
         # another band, so leaving it costs nothing.
         for ssrc, created_with in sorted(self._created.items()):
             if created_with in RECREATE_ON_RETUNE:
-                continue
+                continue    # retuning one kills it; it is replaced instead
             try:
                 self.control.set_frequency(ssrc, freq_hz)
             except Exception as e:
@@ -555,9 +553,16 @@ class Vfo:
 
         fresh = self._ensure_channel_exists(
             freq_hz, preset, sample_rate,
-            # A second attempt for a preset that cannot be retuned means the
-            # channel we were handed is dead; ask for a different one.
-            force_new=restart_demod and preset in RECREATE_ON_RETUNE,
+            # The retry does NOT ask for a new channel. It used to, on the
+            # theory that a wfm channel which produced nothing must be dead --
+            # but that measurement predates centring. With the window centred
+            # the channel is usually fine and merely slow, so creating another
+            # one left the app listening to the newest while an earlier one
+            # played: observed with three wfm channels at 91.300 MHz, one
+            # reading snr 13.5 and the stream following a different, silent
+            # one. The retry re-asserts the preset instead, which restarts the
+            # demodulator in place.
+            force_new=False,
         )
         if fresh and self._stream is not None:
             # The old stream is following an SSRC that no longer exists.

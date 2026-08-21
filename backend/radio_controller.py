@@ -160,7 +160,6 @@ class RadioController:
         self.vfo.preset = None
         self.vfo._channel_freq_hz = None
         self.vfo._created.clear()
-        self.vfo._per_station.clear()
 
         # Clear anything a previous run left on any of our groups. One live
         # channel in another band holds the front end there and no anchor can
