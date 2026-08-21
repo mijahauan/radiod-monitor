@@ -140,13 +140,31 @@ frames, create-then-`set_frequency` left the LO at 162.077 and produced
 nothing. `Vfo._tune_once` therefore sends a frequency only on a genuine
 retune.
 
-**Known limit: wideband FM.** radiod judges a channel in range by its *filter*
-width, but `wfm` needs ±192 kHz for its 384 kHz composite. A station radiod
-parks 111 kHz inside the window edge loses 81 kHz of that composite and the
-demodulator produces nothing. A spectrum channel like ka9q-web's was tried as
-a fix and did not move the front end — the station is already in range, so
-radiod has no reason to. Unresolved; the next step is to observe what a
-working ka9q-web session actually sends.
+**Known limit: wideband FM on a narrow window. Not an app defect.** radiod
+judges a channel in range by its *filter* width, but `wfm` needs ±192 kHz for
+its 384 kHz composite. A station radiod parks 111 kHz inside the window edge
+loses 81 kHz of that composite and the demodulator sputters.
+
+**ka9q-web fails identically here**, which settles it. Captured on the wire
+(2026-08-20) driving a real ka9q-web v2.85 session against this HF+, its
+entire tuning vocabulary is two commands on one long-lived channel:
+
+    tune   OUTPUT_SSRC=<audio>  LIFETIME=1000  RADIO_FREQUENCY=91300000
+    demod  OUTPUT_SSRC=<audio>  LIFETIME=1000  PRESET=wfm
+
+No OUTPUT_ENCODING, no squelch, no sample rate, no destination, no AGC or
+gain — radiod applies the preset's own defaults, which is why its channels
+came back at 24 kHz for nfm, 48 kHz for wfm and 12 kHz for usb. It also runs
+a second channel for its waterfall (`DEMOD_TYPE=4`, `BIN_COUNT=1620`,
+`RESOLUTION_BW=2000` — a 3.24 MHz span) and re-sends `LIFETIME` with every
+substantive command.
+
+Its wfm channel at 91.300 MHz landed at **IF +219.2 kHz with no SNR** — the
+same edge-parked position ours lands in — and emitted **74 RTP packets in 8 s**
+where continuous audio is ~50/s. So there is nothing to copy: wideband FM
+through a 660.5 kHz window is a property of the radio, and the reference
+client hits it too. On the R2's 4.1 MHz window a plain `create_channel` gives
+601 frames in 6 s at snr 29.1.
 
 Measured windows: **660.5 kHz** (Airspy HF+ @ 768k), **4.1 MHz** (Airspy R2 @
 10 Msps, `isreal=True`, window −4700..−600 kHz — *not* centred on the LO), and
