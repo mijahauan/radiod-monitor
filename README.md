@@ -32,7 +32,7 @@ FastAPI + Uvicorn  (backend/)
   ├── app.py               — HTTP/WS routes, activity monitor
   ├── radio_controller.py  — sensor channels (ensure_channel), squelch
   ├── vfo.py               — the one retunable channel a listener hears
-  ├── window.py            — front-end window probe/centre (anchor channel)
+  ├── window.py            — reads where radiod put the front-end window
   ├── geo.py               — Maidenhead + haversine
   └── sources/             — pluggable frequency providers
       ├── base.py          — Source protocol, Station dataclass

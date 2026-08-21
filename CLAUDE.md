@@ -97,8 +97,8 @@ This is the unified successor to the sibling projects `../nws-monitor` and `../r
 Registry lives in [backend/sources/__init__.py](backend/sources/__init__.py); adding a new source is one import + one entry in `_SOURCES`. Three sources ship:
 
 - **`NwsSource`** ([backend/sources/nws.py](backend/sources/nws.py)) — loads `data/nws_stations.json`, 7-channel NWR band centered on 162.475 MHz, no per-source controls, preset `nfm`. Falls back to the 7 standard frequencies at the user's exact location if no station is within range, so the audio pipeline is still exercisable.
-- **`RepeaterSource`** ([backend/sources/repeaters.py](backend/sources/repeaters.py)) — loads `data/repeaters*.kml` (RepeaterBook export, newest mtime wins), filters by distance and by a real amateur band (2m / 1.25m / 70cm), preset `nfm`. Whether those stations can be monitored simultaneously is `RadioController.fits_window()`'s decision (see above). Parses callsign, downlink frequency, offset sign, and PL tone from the KML description CDATA. Warns at load time if the KML is >180 days old.
-- **`FmSource`** ([backend/sources/fm.py](backend/sources/fm.py)) — loads `data/fm_stations.json` (compiled by [scripts/fetch_fm_stations.py](scripts/fetch_fm_stations.py) from the FCC CDBS public files), filters by distance across the whole 88–108 MHz band, preset `wfm`, `audio_channels=2`. Whether those stations can be monitored simultaneously is `RadioController.fits_window()`'s decision (see above). The `wfm` preset in [ka9q-radio/share/presets.conf](../ka9q-radio/share/presets.conf) forces a 384 kHz downconverter and 48 kHz output with 75 µs North American de-emphasis. **It does not force stereo** — both the repo copy and the installed `/usr/local/share/ka9q-radio/presets.conf` set `mono = yes`, which is why `audio_channels` is only a hint and the real count comes off the wire.
+- **`RepeaterSource`** ([backend/sources/repeaters.py](backend/sources/repeaters.py)) — loads `data/repeaters*.kml` (RepeaterBook export, newest mtime wins), filters by distance and by a real amateur band (2m / 1.25m / 70cm), preset `nfm`. Only the station a listener clicks is put on the air; the list is a directory. Parses callsign, downlink frequency, offset sign, and PL tone from the KML description CDATA. Warns at load time if the KML is >180 days old.
+- **`FmSource`** ([backend/sources/fm.py](backend/sources/fm.py)) — loads `data/fm_stations.json` (compiled by [scripts/fetch_fm_stations.py](scripts/fetch_fm_stations.py) from the FCC CDBS public files), filters by distance across the whole 88–108 MHz band, preset `wfm`, `audio_channels=2`. Only the station a listener clicks is put on the air; the list is a directory. The `wfm` preset in [ka9q-radio/share/presets.conf](../ka9q-radio/share/presets.conf) forces a 384 kHz downconverter and 48 kHz output with 75 µs North American de-emphasis. **It does not force stereo** — both the repo copy and the installed `/usr/local/share/ka9q-radio/presets.conf` set `mono = yes`, which is why `audio_channels` is only a hint and the real count comes off the wire.
 
 **About the `audio_channels` attribute.** Declared on `Source` and reported in `GET /api/sources` and each `{type: "results"}` message, it is a *hint* only — it seeds `AudioSession` before any audio arrives.
 
@@ -114,16 +114,39 @@ subdivide its band to fit the receiver — that was `segment_band()`, removed on
 Airspy HF+'s 660.5 kHz window, making the user solve the radio's problem before
 reaching the station they wanted.
 
-`RadioController.fits_window()` decides instead, from the measured window
-(`probe_frontend`, `FE_LOW_EDGE`/`FE_HIGH_EDGE`):
+**radiod places the front end. The app does not.** It used to: a
+`choose_anchor_frequency()` / `centre_on()` mechanism created a decoy "anchor"
+channel positioned so radiod's edge-parking rule would incidentally leave the
+LO on the wanted station. All of it was deleted on 2026-08-20 after measuring
+that radiod does the job unaided. On an empty receiver, one channel created
+and nothing else touched:
 
-- **Set fits** (`span <= usable_bw_hz * WINDOW_FILL`) — a channel per station,
-  live SNR, markers go green. NWS always lands here: 7 channels in 150 kHz fit
-  any receiver this app meets.
-- **Set does not fit** — no channels; the list is a directory, and a channel is
-  created only when a listener picks a station. The FM band is 20 MHz and fits
-  no window, so activity across it is simply not observable — an accepted
-  consequence, reported to the UI as `activity: false` rather than hidden.
+| receiver | window | channel | result |
+|---|---|---|---|
+| Airspy R2 | 4.1 MHz (−4700..−600 kHz) | wfm 91.300 | LO 93.9500, IF −2650.0 kHz = the window centre; snr 29.1, 601 frames/6 s |
+| Airspy HF+ | 660.5 kHz (±330.2 kHz) | nfm 162.400 | LO 162.0770, IF +323.0 kHz; snr 12.0, 301 frames/6 s |
+
+radiod centred the wideband channel by itself — the thing the anchor existed
+to force — and the narrowband channel worked happily off-centre with no
+placement at all. Deleting the mechanism took NWS first-audio from 1.2–2.5 s
+to **0.08 s**.
+
+**Do not re-send a frequency a channel already has.** `create_channel()` is
+given the frequency and radiod places the new channel freshly; a subsequent
+`set_frequency()` is a frequency *change*, and radiod moves the front end only
+far enough to bring the channel back in range. Measured on the R2, same
+station and preset: create alone gave LO 93.9500 / IF −2650.0 kHz / 601
+frames, create-then-`set_frequency` left the LO at 162.077 and produced
+nothing. `Vfo._tune_once` therefore sends a frequency only on a genuine
+retune.
+
+**Known limit: wideband FM.** radiod judges a channel in range by its *filter*
+width, but `wfm` needs ±192 kHz for its 384 kHz composite. A station radiod
+parks 111 kHz inside the window edge loses 81 kHz of that composite and the
+demodulator produces nothing. A spectrum channel like ka9q-web's was tried as
+a fix and did not move the front end — the station is already in range, so
+radiod has no reason to. Unresolved; the next step is to observe what a
+working ka9q-web session actually sends.
 
 Measured windows: **660.5 kHz** (Airspy HF+ @ 768k), **4.1 MHz** (Airspy R2 @
 10 Msps, `isreal=True`, window −4700..−600 kHz — *not* centred on the LO), and
@@ -131,10 +154,8 @@ the whole HF spectrum on a direct-sampling RX888.
 
 The frequency strip in the UI draws each station at its frequency and the
 window at its **measured** position, broadcast as `{type: "window"}` by the
-activity monitor. Never infer that position from what the app believes it set:
-`FrontEndWindow.centre_on()`'s anchor mechanism (`backend/window.py`) exists
-precisely because radiod's real placement differed from the obvious model —
-see the anchor-channel notes further down this file.
+activity monitor. `backend/window.py` only reads that position from radiod's
+status; it commands nothing.
 
 **Other clients compete.** The front end is global to the radiod instance.
 `ka9q-web` against the same radiod requests its own window and drags the
@@ -144,7 +165,7 @@ front end away; it must not run alongside this app on one receiver.
 
 Identical in shape to the aligned nws-monitor/repeater-monitor, just generalized:
 
-1. **Control plane — [backend/radio_controller.py](backend/radio_controller.py).** On a `search` message, the active `Source` returns a station list; `apply_stations()` converges the channel set based on what fits in the receiver's window. Sensor channels live on a single stable multicast destination derived from `generate_multicast_ip("radiod-monitor")` — shared across all sources, so mode switching is a delta on the channel set rather than a teardown. The VFO and the anchor live on two *other* groups; see "Three multicast groups" below, and do not move them onto this one. SSRCs are deterministic (hash of frequency, preset, sample_rate, encoding, destination, agc, gain=0.0, and the radiod identity) so they survive server restarts and are recomputed by `_apply_stations_locked`'s convergence diff. Per-user squelch is applied *after* ensure_channel so it doesn't perturb the hash.
+1. **Control plane — [backend/radio_controller.py](backend/radio_controller.py).** On a `search` message, the active `Source` returns a station list; `apply_stations()` converges the channel set based on what fits in the receiver's window. `apply_stations()` creates **nothing** — the station list is a directory, and clicking a station is what puts a channel on the air. The VFO lives on `generate_multicast_ip("radiod-monitor-vfo")`, separate from the legacy sensor group, because `destination` is an input to the SSRC hash. Per-user squelch is applied to the VFO after it is tuned.
 
    **Convergence is a diff, and that is load-bearing.** Because the SSRC is a deterministic hash of exactly the parameters that define a channel, the wanted SSRC set is computable *before* talking to radiod — `allocate_ssrc()` with the same arguments `ensure_channel()` uses internally, including `radiod_host=control.status_address`. An existing channel on our destination whose SSRC is in that set is correct by construction, so it is left untouched; only SSRCs outside the set are removed, and only missing ones are created.
 
@@ -158,7 +179,15 @@ Identical in shape to the aligned nws-monitor/repeater-monitor, just generalized
 
    **The app never computes the SSRC.** `create_channel()` allocates one and `Vfo` stores the opaque integer, handing it back to the library on every later command — the app's vocabulary is frequency, preset, and sample rate, never transport identity. The stream is a `RadiodStream` bound to that stored SSRC, not a `ManagedStream` bound to a frequency: only the former keeps delivering across a retune, because `ManagedStream` re-derives its own SSRC from frequency and preset on every restore and so cannot follow a channel whose frequency it didn't choose.
 
-   **The window is centred LAST, after the frequency and the preset.** `Vfo._tune_once` calls `FrontEndWindow.centre_on()` (`backend/window.py`) as its final step. Centring earlier does not survive: `set_preset` restarts the demodulator, and `wfm.c` re-runs `set_freq` at demod start, which re-parks the channel `filter.max_IF + fudge` inside the window edge and drags the LO with it. Measured on the HF+ (660.5 kHz window), retuning 162.400 MHz nfm → 102.300 MHz wfm, three runs each: centre-first gives IF −219.2 kHz every time — radiod's edge-parking position for wfm, where the 384 kHz composite path falls outside the window — and centre-last gives IF +0.0 kHz every time. This is also what the anchor was always for: it rescues a channel radiod has *already* parked at the edge by moving the LO onto it, which is exactly the sequence the anchor-channel notes further down this file describe. If no RTP arrives within `TUNE_SETTLE_SEC` (1.5 s), `Vfo.tune()` retries by reissuing the preset command — which makes radiod restart the demod in place, still on the same SSRC — up to `MAX_TUNE_ATTEMPTS` (2) before giving up and broadcasting `{"type": "nosignal"}`.
+   **radiod places the front end; the app sends only frequency and preset.**
+   A channel is created with the frequency it wants, and `set_frequency` is
+   sent only for a genuine retune — re-sending a frequency a channel already
+   has makes radiod re-place it minimally instead of freshly. `set_preset`
+   comes after `set_frequency` because a preset command restarts the
+   demodulator and `wfm.c` re-runs `set_freq` at demod start. If no RTP
+   arrives within `TUNE_SETTLE_SEC`, `Vfo.tune()` retries by reissuing the
+   preset — restarting the demod in place on the same SSRC — up to
+   `MAX_TUNE_ATTEMPTS` before broadcasting `{"type": "nosignal"}`.
 
    radiod is configured with `Encoding.OPUS`, `sample_rate=48000`, `samples_per_packet=960` (20 ms), `deliver_interval_packets=1`, and **`raw_payloads=True`** — ka9q-python's transport mode for framed encodings, where `on_samples` receives a `List[bytes]` of undecoded RTP payloads with the resequencer bypassed (a codec frame is opaque: it can be neither concatenated nor zero-filled, and gap concealment belongs to the decoder). With `deliver_interval_packets=1` that is exactly one encoded frame per call.
 
@@ -166,13 +195,12 @@ Identical in shape to the aligned nws-monitor/repeater-monitor, just generalized
 
    **WebCodecs requires a secure context** (HTTPS or `localhost`) — the shell script auto-generates a self-signed cert to satisfy this.
 
-### Three multicast groups, and why they must stay three
+### Two multicast groups, and why they must stay three
 
 | group | attribute | slug | holds |
 |---|---|---|---|
 | sensors | `controller.destination` | `radiod-monitor` | the activity-map channels, one per station, never listened to |
 | VFO | `controller.vfo_destination` | `radiod-monitor-vfo` | the one channel a listener actually hears |
-| anchor | `controller.anchor_destination` | `radiod-monitor-anchor` | the squelched-shut channel that positions the front end |
 
 `destination` is one of the inputs to `allocate_ssrc`. So is frequency, preset, sample rate, encoding, gain, agc, and the radiod identity — and `create_channel()` auto-allocates from **exactly** the argument list `_apply_stations_locked` uses to compute the sensor set. Put the VFO on the sensor group and tune it to a station that is also monitored (NWS mode, always) and the two SSRCs are *the same integer*: one radiod channel doing both jobs. Measured, 162.475 MHz / `nfm` / 48 kHz / OPUS:
 
@@ -184,7 +212,7 @@ same group for both         -> 551094885 == 551094885   COLLIDE
 
 Nothing about that fails loudly. The audio keeps playing while the search re-applies the user's squelch over the VFO's held-open one, retunes the channel the user is listening through back to the sensor's frequency, and reports one station's SNR on another station's marker. It also defeated the adopt-an-existing-channel scan in `Vfo._ensure_channel_exists`, which took `existing[0]` off the group and so could adopt an arbitrary sensor — or, in the first seconds after startup, `probe()`'s throwaway channel that radiod was still purging, which is a dead channel producing no audio.
 
-Separate groups make all of that impossible by construction, and make the VFO's and the anchor's exemption from the stale-channel sweep **structural**: neither can appear in the swept set at all. There is deliberately no `ssrc == vfo.ssrc` check in `_apply_stations_locked` — the one that used to be there never ran in the case it was written for (the aliased SSRC was in `desired`), which is precisely the kind of dead guard that has misled work in this repo before. If the VFO is ever swept, the bug is that it moved back onto the sensor group.
+Separate groups make that impossible by construction and make the VFO's exemption from the legacy sensor sweep **structural**: it cannot appear in the swept set at all. There is deliberately no `ssrc == vfo.ssrc` check in `_apply_stations_locked` — the one that used to be there never ran in the case it was written for (the aliased SSRC was in `desired`), which is precisely the kind of dead guard that has misled work in this repo before. If the VFO is ever swept, the bug is that it moved back onto the sensor group.
 
 What still has to be kept true across `RadioController.apply_stations()` and `Vfo.tune()`: both must assert `OUTPUT_ENCODING = OPUS` after creating or retuning a channel, or radiod serves the preset default on whichever path skipped it. `preset` and `sample_rate` cannot drift — `websocket_audio`'s command loop reads them off `controller.preset`/`controller.sample_rate` on every `vfo.tune()` call, and `_handle_search` publishes them synchronously before the results message reaches the browser so an eager Listen click cannot land in the gap. `audio_channels` is not part of this coupling: it is a display hint, and the decoder is configured from the first Opus frame's TOC byte instead.
 
@@ -258,102 +286,20 @@ Measured, same channel, same moment, before the upgrade:
 Hardware note: both radios are now attached. `radiod@airspy-generic` drives the
 wideband Airspy R2 (10 Msps, **4.1 MHz** usable window, `isreal=True`, window
 reported as −4700..−600 kHz — not centred on the LO, which is why
-`backend/window.py`'s anchor placement is computed from the window's
-half-width rather than assuming symmetry — see fact below). As of 2026-08-19 the
-R2 hears nothing on VHF — NWR reads −9 to −22 dB against +17.6 dB on the HF+ —
-so it likely has no antenna connected. The HF+ is the receiver with the working
-VHF feed, at a 660.5 kHz window.
+**The anchor is gone** (2026-08-20). `backend/window.py` used to create a
+decoy channel positioned so radiod's edge-parking rule would leave the LO on
+the wanted station. Measurement showed radiod places the front end correctly
+by itself — see "radiod places the front end" above — and deleting the whole
+mechanism took NWS first-audio from 1.2–2.5 s to 0.08 s. `window.py` now only
+reads the window position so the frequency strip can draw it.
 
-The HF+ **does** tune VHF: measured clean tuning at 146 MHz and 36 dB SNR at
-162 MHz (NWR audio plays). What it cannot do is cover much at once — a 660.5 kHz
-window — which is why band segments are now cut to the radio rather than fixed.
-Broadcast FM works, but only because the app centres the window on the station.
-Getting there took three fixes and disproved three earlier guesses in this file
-(front-end bandwidth, antenna, then "it works" on the strength of frame counts).
+What survives from that work, because it is still true of radiod:
 
-1. **ka9q-python sent `DEMOD_TYPE` contradicting the preset.** It derived the
-   demodulator from a five-name allowlist and sent it right after `PRESET` in
-   the same packet, so `wfm` got `FM_DEMOD` and radiod ran the *narrowband* FM
-   demod behind a ±110 kHz filter — no output, `snr=-inf`, no error. Fixed in
-   ka9q-python 3.25.1.
-
-2. **`Source.snr_squelch = False` cannot be honoured as written.** `wfm.c` sets
-   `chan->squelch.snr_enable = true` unconditionally at demod start, so
-   `_squelch_args()` holds the squelch open with a −20 dB threshold instead.
-
-3. **radiod parks a channel at the window edge, and wfm cannot demodulate
-   there.** `set_freq()` retunes only far enough to bring a channel's *filter*
-   inside, leaving it `filter.max_IF + fudge` — 111 kHz for wfm — from the
-   edge. But `wfm.c` demodulates through a 384 kHz composite path needing
-   ±192 kHz around the channel, so 81 kHz of it falls outside the window. The
-   demod then half-works: clear voice in brief fragments, `snr` flipping to
-   `-inf`. The 111 kHz margin is identical on a 660 kHz HF+ window and a
-   4.1 MHz R2 window, so no receiver is wide enough to escape it.
-
-   `backend/window.py`'s `FrontEndWindow` fixes this with an **anchor
-   channel** — see its module docstring and `choose_anchor_frequency()` for
-   the mechanics, and `FrontEndWindow.centre_on()`/`release()` for the
-   lifecycle. Placing a narrow `am` channel outside the window makes radiod's
-   edge-parking of *that* channel leave the LO on our station; every other
-   channel then recalculates its IF against the new LO, so the station sits at
-   IF ≈ 0 with the whole composite inside the window. Measured at 102.300 MHz:
-   IF +219.2 kHz / `snr=-inf` / ~17 frames per 10 s before, IF +0.0 kHz /
-   `snr` 6.5 / 500 frames per 10 s after.
-
-   Three facts belong here because each was expensive to learn and none is
-   visible from the code alone:
-
-   - **The anchor offset is half the window's WIDTH, not either edge**:
-     `target ± ((high_edge - low_edge)/2 - margin)`. The edge-based form
-     (`target + (high_edge - margin)`) is arithmetically identical only when
-     the window happens to be symmetric about the LO — which is why it
-     worked on the Airspy HF+ and hid the bug for so long — but on the R2,
-     whose window sits at −4700..−600 kHz, it places the anchor *inside* the
-     window, where radiod ignores it. Anchor placement fails **silently**:
-     no error, just a station that never comes up. Which side of the target
-     the anchor actually lands on depends on where the LO currently sits;
-     `choose_anchor_frequency()` computes both candidates and returns
-     whichever is genuinely outside the window.
-   - **The anchor lives on its own multicast destination**
-     (`radiod-monitor-anchor`), and so does the VFO (`radiod-monitor-vfo`).
-     Sharing one destination let the VFO's adopt-an-existing-channel scan
-     mistake the anchor for the VFO after a restart, which then "centred"
-     the window on wherever the anchor happened to be instead of the station
-     the user asked for — and, worse, aliased the VFO's SSRC onto a sensor's.
-     `probe()`'s throwaway channel goes on the anchor group for the same
-     reason. See "Three multicast groups" above; neither the anchor nor the
-     VFO needs an exemption from the stale-channel sweep, because neither is
-     ever in the set it sweeps.
-   - **A channel radiod parks at the window edge cannot be rescued by
-     moving the window onto it afterwards** — the demodulator does not
-     recover. `Vfo._tune_once` therefore runs a fixed five-step order and
-     every step of it is load-bearing: `centre_on()`, *then*
-     `_ensure_channel_exists()` (so a channel radiod creates is created
-     inside an already-centred window — creating it first left a fresh `wfm`
-     demod parked at the edge, rescued only by accident when the 1.5 s retry
-     re-asserted the preset), *then* `set_frequency()`, *then* `set_preset()`
-     if the preset changed or this is a retry, *then* `set_output_encoding()`
-     and the squelch. `set_preset` restarts the demodulator and `wfm.c`
-     re-runs `set_freq` at demod start, so issuing it before `set_frequency`
-     re-places the channel from the *previous* station's frequency and drags
-     the LO back off the target.
-
-   The anchor is squelched shut, created once and then retuned (never
-   recreated per station), and dropped by `FrontEndWindow.release()` when
-   the last audio listener disconnects. If radiod is ever fixed to reserve
-   the demodulator's real bandwidth around a channel, `backend/window.py`
-   collapses to just `probe()` and `read()` — no anchor needed.
-
-   The idea came from ka9q-web, which runs a spectrum channel alongside its
-   audio channel and so positions the front end without ever commanding the LO.
-   Nothing else moves the placement: `set_first_lo` is ignored, approach
-   direction is irrelevant, and `low_edge`/`high_edge` are overridden when
-   `wfm.c` re-runs `set_freq` at demod start.
-
-**Verify FM audio by listening to the content, not by counting frames.** A
-wide-open squelch streams noise at full rate, which satisfies any check based
-on packet count or RMS — that is how "FM works" got claimed here in error once.
-Compare spectral shape and envelope variation against a known-good station: NWR
-reads voice/hiss 13.8 and envelope variation 0.49; steady hiss reads 0.03.
-102.300 MHz through the browser path now reads voice/hiss 14.1 over 8.8 s of
-continuous audio.
+- `set_freq()` parks a channel `filter.max_IF + fudge` inside the window edge
+  when it has to retune the front end, and judges "in range" by the channel's
+  FILTER width. `wfm` needs ±192 kHz for its 384 kHz composite, which is more
+  than its filter, so a wfm channel parked at the edge produces nothing. This
+  is the open wideband-FM problem.
+- A frequency *change* moves the front end only far enough to bring the
+  channel back in range; a newly *created* channel is placed freshly. Never
+  re-send a frequency a channel already has.
